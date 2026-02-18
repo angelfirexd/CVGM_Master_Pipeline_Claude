@@ -1,0 +1,3345 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Eye,
+  HelpCircle,
+  RefreshCw,
+  RotateCcw,
+  SplitSquareHorizontal,
+} from "lucide-react";
+
+/**
+ * CVGM Character Pipeline Interactive (Meshy-style)
+ * Single-file React app.
+ *
+ * v2 changes applied:
+ * - Stations 1–2 are now a guided FULLSCREEN onboarding flow.
+ * - Station 1 archetype is discovered via Function + Feeling (with optional manual override).
+ * - Station 2 shows a 6-phase concept art pipeline + a concept “handoff packet”.
+ * - Stations 3–4 keep the existing Meshy 3-column layout and the same computeAssetFacts/computePerformance logic.
+ */
+
+// -----------------------------
+// Data
+// -----------------------------
+
+const BRANCHES = {
+  A: {
+    id: "A",
+    name: "Photorealistic (AAA)",
+    color: "bg-rose-100",
+    badge: "bg-rose-200 text-rose-900",
+    description:
+      "Highest fidelity, full PBR, baking, complex rigs, mocap-heavy; biggest budgets.",
+    defaults: {
+      platform: "Console/PC",
+      pov: "3rd Person",
+      cameraDistance: "Mid",
+    },
+  },
+  B: {
+    id: "B",
+    name: "Stylized Realism (AA/AAA)",
+    color: "bg-sky-100",
+    badge: "bg-sky-200 text-sky-900",
+    description:
+      "Stylized PBR/hybrid look, clean readability, medium budgets; best ‘museum sweet spot’.",
+    defaults: {
+      platform: "Console/PC",
+      pov: "3rd Person",
+      cameraDistance: "Mid",
+    },
+  },
+  C: {
+    id: "C",
+    name: "Artistic Unique (Indie)",
+    color: "bg-violet-100",
+    badge: "bg-violet-200 text-violet-900",
+    description:
+      "Art-direction-first: shaders + hand-painted textures + bold silhouettes; small teams.",
+    defaults: {
+      platform: "PC",
+      pov: "3rd Person",
+      cameraDistance: "Mid",
+    },
+  },
+  D: {
+    id: "D",
+    name: "2D Minimal (Sprites / Pixel / 2.5D)",
+    color: "bg-emerald-100",
+    badge: "bg-emerald-200 text-emerald-900",
+    description:
+      "2D-first pipeline: spritesheets, palette discipline, fastest iteration; small scope.",
+    defaults: {
+      platform: "Mobile/Switch",
+      pov: "Side",
+      cameraDistance: "Far",
+    },
+  },
+};
+
+const ARCHETYPES = [
+  { id: "hero", label: "Hero", hint: "brave, proactive, driven" },
+  { id: "caregiver", label: "Caregiver", hint: "supportive, protective" },
+  { id: "explorer", label: "Explorer", hint: "curious, adventurous" },
+  { id: "creator", label: "Creator", hint: "inventive, expressive" },
+  { id: "rebel", label: "Rebel", hint: "disruptive, defiant" },
+  { id: "sage", label: "Sage", hint: "wise, analytical" },
+  { id: "innocent", label: "Innocent", hint: "pure, hopeful" },
+  { id: "jester", label: "Jester", hint: "playful, chaotic" },
+  { id: "magician", label: "Magician", hint: "transformative, mystical" },
+  { id: "ruler", label: "Ruler", hint: "commanding, structured" },
+  { id: "lover", label: "Lover", hint: "passionate, relational" },
+  { id: "everyman", label: "Everyperson", hint: "relatable, grounded" },
+];
+
+const FUNCTIONS = [
+  { id: "protect", label: "Protect", hint: "defend / shield / keep safe" },
+  { id: "guide", label: "Guide", hint: "teach / clarify / lead calmly" },
+  { id: "spark", label: "Inspire", hint: "ignite courage / hope / action" },
+  { id: "create", label: "Create", hint: "build / express / invent" },
+  { id: "disrupt", label: "Disrupt", hint: "challenge rules / break patterns" },
+  { id: "connect", label: "Connect", hint: "bond / nurture / relate" },
+  { id: "explore", label: "Explore", hint: "seek the unknown / discovery" },
+  { id: "transform", label: "Transform", hint: "make the impossible real" },
+];
+
+const FEELINGS = [
+  { id: "brave", label: "Brave", hint: "ready to act" },
+  { id: "safe", label: "Safe", hint: "grounded / protected" },
+  { id: "curious", label: "Curious", hint: "pulled to discover" },
+  { id: "joy", label: "Joyful", hint: "playful / light" },
+  { id: "inspired", label: "Inspired", hint: "creative spark" },
+  { id: "defiant", label: "Defiant", hint: "push back / resist" },
+  { id: "wise", label: "Wise", hint: "analytical / calm" },
+  { id: "loved", label: "Loved", hint: "connected / intimate" },
+];
+
+const CONCEPT_STYLES = [
+  { id: "classic", label: "Classic", hint: "clear shapes, timeless reads" },
+  { id: "modern", label: "Modern", hint: "clean forms, graphic clarity" },
+  { id: "mythic", label: "Mythic", hint: "symbolic motifs, epic energy" },
+  { id: "comedic", label: "Comedic", hint: "exaggeration, charm, contrast" },
+];
+
+const CONCEPT_PHASES = [
+  {
+    id: "brief",
+    label: "Brief + References",
+    desc: "Define constraints, gather mood & shape references.",
+  },
+  {
+    id: "thumbs",
+    label: "Thumbnails (Silhouette)",
+    desc: "Fast ideation: many shapes before details.",
+  },
+  {
+    id: "line",
+    label: "Line Exploration",
+    desc: "Refine proportions, costume, readable features.",
+  },
+  {
+    id: "color",
+    label: "Color + Materials",
+    desc: "Palette, material callouts, value readability.",
+  },
+  {
+    id: "turnaround",
+    label: "Turnaround + Callouts",
+    desc: "Front/side/back + key construction notes.",
+  },
+  {
+    id: "handoff",
+    label: "Final Sheet + Handoff Pack",
+    desc: "Expressions/poses + export-ready notes for 3D.",
+  },
+];
+
+const STATIONS = [
+  {
+    id: 1,
+    name: "Station 1: Foundations",
+    short: "Function + Feeling",
+  },
+  {
+    id: 2,
+    name: "Station 2: Concept Art",
+    short: "6-Phase Pipeline",
+  },
+  {
+    id: 3,
+    name: "Station 3: 3D Production",
+    short: "Meshy-style Stages",
+  },
+  {
+    id: 4,
+    name: "Station 4: Engine + Runtime",
+    short: "Make it Playable",
+  },
+];
+
+const STATION3_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "modeling", label: "Modeling" },
+  { id: "retopo", label: "Retopology" },
+  { id: "uv", label: "UV Mapping" },
+  { id: "baking", label: "Baking" },
+  { id: "texturing", label: "Texturing" },
+  { id: "shader", label: "Material/Shader" },
+  { id: "rigging", label: "Rigging" },
+  { id: "animation", label: "Animation" },
+  { id: "handoff", label: "Export/Handoff" },
+];
+
+const STATION4_TABS = [
+  { id: "import", label: "Import" },
+  { id: "stats", label: "Stats" },
+  { id: "controller", label: "Animation Controller" },
+  { id: "performance", label: "Performance" },
+  { id: "runtime", label: "Runtime Systems" },
+  { id: "tuning", label: "Data Tuning" },
+  { id: "demo", label: "Playable + Compare" },
+];
+
+const GLOSSARY = {
+  retopo:
+    "Retopology: rebuilding a high-detail sculpt into clean, animatable topology that runs in real time.",
+  uv: "UV Mapping: flattening a 3D model onto 2D space so textures can be painted/applied without stretching.",
+  baking:
+    "Baking: transferring detail from high-poly to low-poly via maps (normal/AO/curvature), preserving detail at lower cost.",
+  pbr: "PBR: Physically Based Rendering—materials react to light in a physically plausible way (roughness/metalness, etc.).",
+  rigging:
+    "Rigging: creating a skeleton and weighting the mesh so it deforms when animated; may include facial rigs/blendshapes.",
+  controller:
+    "Animation Controller: a state machine that connects input/game logic to animation clips (Idle↔Run→Attack…).",
+  lod: "LOD: Level of Detail—lower-poly versions used at distance to improve performance.",
+};
+
+// -----------------------------
+// Helpers
+// -----------------------------
+
+function cx(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function prettyJSON(obj) {
+  return JSON.stringify(obj, null, 2);
+}
+
+function is3DBranch(branchId) {
+  return branchId !== "D";
+}
+
+function branchDefaults(branchId) {
+  return BRANCHES[branchId]?.defaults ?? BRANCHES.B.defaults;
+}
+
+function getArchetypeMeta(id) {
+  return ARCHETYPES.find((a) => a.id === id) ?? ARCHETYPES[0];
+}
+
+// Archetype discovery via Function + Feeling (deterministic)
+function deriveArchetype(functionRole, feelingTone) {
+  const map = {
+    protect: {
+      safe: "caregiver",
+      brave: "hero",
+      wise: "ruler",
+      curious: "hero",
+      joy: "innocent",
+      inspired: "hero",
+      defiant: "hero",
+      loved: "caregiver",
+    },
+    guide: {
+      wise: "sage",
+      curious: "explorer",
+      safe: "sage",
+      brave: "hero",
+      inspired: "sage",
+      joy: "jester",
+      defiant: "rebel",
+      loved: "everyman",
+    },
+    spark: {
+      brave: "hero",
+      inspired: "magician",
+      joy: "innocent",
+      curious: "explorer",
+      safe: "everyman",
+      defiant: "rebel",
+      wise: "sage",
+      loved: "lover",
+    },
+    create: {
+      inspired: "creator",
+      joy: "jester",
+      curious: "creator",
+      wise: "sage",
+      brave: "hero",
+      safe: "creator",
+      defiant: "rebel",
+      loved: "lover",
+    },
+    disrupt: {
+      defiant: "rebel",
+      brave: "rebel",
+      curious: "jester",
+      inspired: "rebel",
+      joy: "jester",
+      safe: "rebel",
+      wise: "sage",
+      loved: "rebel",
+    },
+    connect: {
+      loved: "lover",
+      safe: "everyman",
+      joy: "jester",
+      inspired: "lover",
+      brave: "hero",
+      curious: "everyman",
+      defiant: "rebel",
+      wise: "sage",
+    },
+    explore: {
+      curious: "explorer",
+      brave: "explorer",
+      inspired: "magician",
+      joy: "jester",
+      safe: "everyman",
+      defiant: "rebel",
+      wise: "sage",
+      loved: "lover",
+    },
+    transform: {
+      inspired: "magician",
+      wise: "magician",
+      brave: "hero",
+      curious: "magician",
+      joy: "jester",
+      safe: "everyman",
+      defiant: "rebel",
+      loved: "lover",
+    },
+  };
+
+  return (
+    map?.[functionRole]?.[feelingTone] ||
+    // fallbacks by function
+    (functionRole === "create"
+      ? "creator"
+      : functionRole === "protect"
+      ? "caregiver"
+      : functionRole === "disrupt"
+      ? "rebel"
+      : functionRole === "explore"
+      ? "explorer"
+      : functionRole === "guide"
+      ? "sage"
+      : functionRole === "transform"
+      ? "magician"
+      : functionRole === "connect"
+      ? "lover"
+      : "hero")
+  );
+}
+
+// Station 2: concept “handoff packet”
+function computeConceptPacket({ archetypeId, branchId, conceptStyleId }) {
+  const a = getArchetypeMeta(archetypeId);
+  const style = CONCEPT_STYLES.find((s) => s.id === conceptStyleId) ?? CONCEPT_STYLES[0];
+
+  const cameraNote =
+    branchId === "A"
+      ? "close-up reads matter; micro-detail supported"
+      : branchId === "B"
+      ? "readable mid-distance silhouette + clean materials"
+      : branchId === "C"
+      ? "bold silhouette + stylized shaders/painted cues"
+      : "sprite readability + palette discipline";
+
+  const deliverables = [
+    "Silhouette set (8–16 thumbs)",
+    "Line exploration (2–4 candidates)",
+    "Color palette + material callouts",
+    "Turnaround (front/side/back)",
+    "Expression sheet (6–9 faces)",
+    "Pose sheet (3 key poses)",
+    "Notes for 3D: scale, proportions, costume layering, hard/soft parts",
+  ];
+
+  const prompts = [
+    `Character concept sheet, archetype: ${a.label}, style: ${style.label}, branch ${branchId}. Clean silhouette, readable shapes, neutral lighting, orthographic front/side/back.`,
+    `Expression sheet for ${a.label} character, ${style.label} vibe. 9 expressions, consistent proportions, simple background, clear linework.`,
+    branchId === "D"
+      ? `2D spritesheet for ${a.label} character, ${style.label} vibe. 8-frame walk cycle, 4-frame idle, limited palette, crisp pixel/sprite readability.`
+      : `Material callouts for ${a.label} character, ${style.label} vibe. PBR/stylized notes, roughness/metalness cues, fabric/leather/metal separation, readable values.`,
+  ];
+
+  const handoffChecklist =
+    branchId === "D"
+      ? [
+          "Sprite size target (SD/HD) + canvas",
+          "Palette (8–24 colors) + value hierarchy",
+          "State list (Idle/Walk/Interact/Hit)",
+          "Timing notes (frames per state)",
+          "Engine notes: pivot, slicing, naming",
+        ]
+      : [
+          "Scale reference (meters) + pivot/origin",
+          "Hard surface vs cloth segmentation notes",
+          "Material IDs list (skin/hair/cloth/metal)",
+          "Any asymmetry callouts (scars, patches)",
+          "Rig notes (face? props? cloth sim?)",
+        ];
+
+  return {
+    title: `${a.label} · ${style.label} concept`,
+    cameraNote,
+    deliverables,
+    prompts,
+    handoffChecklist,
+  };
+}
+
+// Approximate “asset facts” generator (deterministic by branch + choices)
+function computeAssetFacts({ branchId, s3, s4 }) {
+  // Base ranges are intentionally broad; this is museum-facing.
+  const base = {
+    A: { tris: 90000, tex: "4K", memMB: 220, bones: 140, clips: 18 },
+    B: { tris: 35000, tex: "2K", memMB: 120, bones: 90, clips: 12 },
+    C: { tris: 22000, tex: "2K", memMB: 90, bones: 75, clips: 8 },
+    D: { tris: 0, tex: "Palette", memMB: 8, bones: 0, clips: 0 },
+  };
+
+  let r = { ...base[branchId] };
+
+  // Station 3 modifiers
+  if (branchId !== "D") {
+    if (s3.modelingMethod === "Sculpt") r.tris += 10000;
+    if (s3.platformBudget === "Mobile") r.tris = Math.round(r.tris * 0.6);
+    if (s3.platformBudget === "Switch") r.tris = Math.round(r.tris * 0.75);
+
+    if (s3.texRes === "1K") {
+      r.tex = "1K";
+      r.memMB = Math.round(r.memMB * 0.6);
+    }
+    if (s3.texRes === "4K") {
+      r.tex = "4K";
+      r.memMB = Math.round(r.memMB * 1.35);
+    }
+
+    if (s3.shaderType === "Unlit") r.memMB = Math.round(r.memMB * 0.9);
+    if (s3.shaderType === "Toon") r.memMB = Math.round(r.memMB * 1.0);
+
+    if (s3.rigComplexity === "Body+Face") r.bones += 40;
+    if (s3.animationSource === "Mocap") r.clips += 6;
+    if (s3.animationSource === "Preset") r.clips = Math.max(6, r.clips - 4);
+  } else {
+    // 2D sprite stats
+    r.memMB = s4.spriteRes === "HD" ? 24 : 10;
+    r.tex = s4.spriteRes === "HD" ? "HD spritesheet" : "SD spritesheet";
+  }
+
+  return r;
+}
+
+function computePerformance({ branchId, s4, facts }) {
+  // Very simplified FPS model.
+  let fps = 60;
+  if (branchId === "A") fps -= 10;
+  if (branchId === "D") fps += 5;
+
+  // Crowd test
+  const crowd = s4.crowd === "On" ? 12 : 1;
+  const crowdPenalty = Math.log2(crowd) * 6;
+
+  // Quality
+  const qualityPenalty =
+    s4.qualityPreset === "Cinematic" ? 12 : s4.qualityPreset === "Balanced" ? 6 : 0;
+
+  // LOD
+  const lodBonus = s4.lod === 0 ? 0 : s4.lod === 1 ? 3 : s4.lod === 2 ? 7 : 10;
+
+  // Texture res
+  const texPenalty = facts.tex === "4K" ? 6 : facts.tex === "2K" ? 2 : 0;
+
+  fps = fps - crowdPenalty - qualityPenalty - texPenalty + lodBonus;
+  fps = clamp(Math.round(fps), 18, 120);
+
+  return { fps, crowd };
+}
+
+// -----------------------------
+// UI Building Blocks
+// -----------------------------
+
+function Pill({ children, tone = "neutral" }) {
+  const cls =
+    tone === "neutral"
+      ? "bg-zinc-100 text-zinc-800"
+      : tone === "good"
+      ? "bg-emerald-100 text-emerald-900"
+      : tone === "warn"
+      ? "bg-amber-100 text-amber-900"
+      : "bg-rose-100 text-rose-900";
+
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        cls
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Card({ title, right, children }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      {(title || right) && (
+        <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+          <div className="text-sm font-semibold text-zinc-900">{title}</div>
+          <div>{right}</div>
+        </div>
+      )}
+      <div className="px-4 py-3">{children}</div>
+    </div>
+  );
+}
+
+function Segmented({ value, options, onChange }) {
+  return (
+    <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={cx(
+              "rounded-lg px-3 py-1 text-xs font-semibold transition",
+              active ? "bg-white shadow-sm" : "text-zinc-600 hover:text-zinc-900"
+            )}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange, label, hint }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={cx(
+          "mt-0.5 h-5 w-9 rounded-full border transition",
+          checked ? "bg-zinc-900" : "bg-zinc-200"
+        )}
+        aria-label={label}
+      >
+        <span
+          className={cx(
+            "block h-4 w-4 translate-x-0.5 rounded-full bg-white transition",
+            checked ? "translate-x-[18px]" : ""
+          )}
+        />
+      </button>
+      <span className="flex-1">
+        <div className="text-sm font-semibold text-zinc-900">{label}</div>
+        {hint && <div className="text-xs text-zinc-600">{hint}</div>}
+      </span>
+    </label>
+  );
+}
+
+function Divider() {
+  return <div className="my-3 h-px w-full bg-zinc-100" />;
+}
+
+function Modal({ open, title, children, onClose }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <motion.div
+            className="w-full max-w-2xl rounded-2xl bg-white shadow-xl"
+            initial={{ y: 18, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 12, opacity: 0 }}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
+              <div className="text-base font-bold text-zinc-900">{title}</div>
+              <button
+                className="rounded-lg px-2 py-1 text-sm font-semibold text-zinc-600 hover:bg-zinc-50"
+                onClick={onClose}
+              >
+                Close
+              </button>
+            </div>
+            <div className="px-5 py-4">{children}</div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// -----------------------------
+// Main App
+// -----------------------------
+
+export default function CVGMPipelineApp() {
+  // High-level journey
+  const [station, setStation] = useState(1);
+
+  // Station 1: archetype discovery (function + feeling)
+  const [functionRole, setFunctionRole] = useState("protect");
+  const [feelingTone, setFeelingTone] = useState("brave");
+  const [archetypeMode, setArchetypeMode] = useState("auto"); // auto | manual
+  const [manualArchetype, setManualArchetype] = useState("hero");
+
+  const derivedArchetype = useMemo(
+    () => deriveArchetype(functionRole, feelingTone),
+    [functionRole, feelingTone]
+  );
+
+  // Station 1 downstream choices
+  const [archetype, setArchetype] = useState(derivedArchetype);
+  const [branchId, setBranchId] = useState("B");
+  const [platform, setPlatform] = useState(branchDefaults("B").platform);
+  const [pov, setPov] = useState(branchDefaults("B").pov);
+  const [cameraDistance, setCameraDistance] = useState(
+    branchDefaults("B").cameraDistance
+  );
+
+  // Station 2
+  const [conceptStyleId, setConceptStyleId] = useState("classic");
+
+  // Station 3 states
+  const [s3Tab, setS3Tab] = useState("overview");
+  const [compare, setCompare] = useState(false);
+  const [compareLayout, setCompareLayout] = useState("2up"); // 2up | 4up
+  const [compareTarget, setCompareTarget] = useState("D");
+
+  const [s3, setS3] = useState({
+    modelingMethod: "Poly",
+    silhouettePriority: "Readability",
+
+    platformBudget: "Console",
+    showEdgeFlow: true,
+
+    uvQuality: "Clean",
+    texelDensity: "Medium",
+
+    maps: { normal: true, ao: true, curvature: false },
+
+    texturingStyle: "PBR",
+    texRes: "2K",
+
+    shaderType: "Standard PBR",
+    outline: false,
+
+    rigComplexity: "Body",
+    controllerSet: "Basic",
+
+    animationSource: "Keyframe",
+    clipCount: "Few",
+  });
+
+  // Station 4 states
+  const [s4Tab, setS4Tab] = useState("import");
+  const [s4, setS4] = useState({
+    importPreset: "Generic",
+    scaleMode: "Auto",
+
+    lod: 1,
+    textureOverride: "Auto",
+    crowd: "Off",
+
+    blend: "Smooth",
+    transitions: "Simple",
+
+    qualityPreset: "Balanced",
+    shadows: true,
+    postfx: "Minimal",
+
+    movement: "Walk",
+    collisionDebug: false,
+    interaction: "Trigger",
+
+    speed: 6,
+    hp: 100,
+    cooldown: 1.0,
+
+    // 2D path
+    spriteRes: "SD", // SD | HD
+    spriteStateMode: "States", // States | Frames
+  });
+
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // Keep archetype in sync with discovery mode
+  useEffect(() => {
+    if (archetypeMode === "auto") setArchetype(derivedArchetype);
+  }, [archetypeMode, derivedArchetype]);
+
+  useEffect(() => {
+    if (archetypeMode === "manual") setArchetype(manualArchetype);
+  }, [archetypeMode, manualArchetype]);
+
+  // Apply branch defaults when branch changes
+  useEffect(() => {
+    const d = branchDefaults(branchId);
+    setPlatform(d.platform);
+    setPov(d.pov);
+    setCameraDistance(d.cameraDistance);
+
+    // Nudge Station 3 defaults per branch
+    setS3((prev) => {
+      const next = { ...prev };
+      if (branchId === "A") {
+        next.modelingMethod = "Sculpt";
+        next.texturingStyle = "PBR";
+        next.texRes = "4K";
+        next.shaderType = "Standard PBR";
+        next.rigComplexity = "Body+Face";
+        next.animationSource = "Mocap";
+        next.maps = { normal: true, ao: true, curvature: true };
+      }
+      if (branchId === "B") {
+        next.modelingMethod = "Poly";
+        next.texturingStyle = "Stylized PBR";
+        next.texRes = "2K";
+        next.shaderType = "Standard PBR";
+        next.rigComplexity = "Body";
+        next.animationSource = "Keyframe";
+        next.maps = { normal: true, ao: true, curvature: false };
+      }
+      if (branchId === "C") {
+        next.modelingMethod = "Poly";
+        next.texturingStyle = "Hand-painted";
+        next.texRes = "2K";
+        next.shaderType = "Toon";
+        next.outline = true;
+        next.rigComplexity = "Body";
+        next.animationSource = "Keyframe";
+        next.maps = { normal: false, ao: true, curvature: true };
+      }
+      if (branchId === "D") {
+        // 2D path—keep S3 but it won’t be primary.
+        next.animationSource = "Spritesheet";
+        next.texturingStyle = "Palette";
+        next.shaderType = "Unlit";
+      }
+      return next;
+    });
+
+    // Nudge Station 4 defaults
+    setS4((prev) => {
+      const next = { ...prev };
+      if (branchId === "A") {
+        next.qualityPreset = "Balanced";
+        next.postfx = "Full";
+        next.shadows = true;
+        next.lod = 1;
+        next.crowd = "Off";
+      }
+      if (branchId === "D") {
+        next.spriteRes = "SD";
+        next.qualityPreset = "Performance";
+        next.postfx = "None";
+        next.shadows = false;
+        next.crowd = "Off";
+      }
+      return next;
+    });
+  }, [branchId]);
+
+  const conceptPacket = useMemo(
+    () => computeConceptPacket({ archetypeId: archetype, branchId, conceptStyleId }),
+    [archetype, branchId, conceptStyleId]
+  );
+
+  // Derived
+  const choices = useMemo(
+    () => ({ archetype, branchId, platform, pov, cameraDistance }),
+    [archetype, branchId, platform, pov, cameraDistance]
+  );
+
+  const facts = useMemo(
+    () => computeAssetFacts({ branchId, s3, s4 }),
+    [branchId, s3, s4]
+  );
+  const perf = useMemo(
+    () => computePerformance({ branchId, s4, facts }),
+    [branchId, s4, facts]
+  );
+
+  const payload = useMemo(() => {
+    return {
+      station1: {
+        functionRole,
+        feelingTone,
+        archetypeMode,
+        archetypeDerived: derivedArchetype,
+        archetypeFinal: archetype,
+        branch: branchId,
+        constraints: { platform, pov, cameraDistance },
+      },
+      station2: {
+        conceptStyleId,
+        conceptPacket,
+      },
+      station3: s3,
+      station4: s4,
+      assetSelection: {
+        characterId: "emberbraid_demo",
+        stage: station === 3 ? s3Tab : station === 4 ? s4Tab : null,
+      },
+    };
+  }, [
+    functionRole,
+    feelingTone,
+    archetypeMode,
+    derivedArchetype,
+    archetype,
+    branchId,
+    platform,
+    pov,
+    cameraDistance,
+    conceptStyleId,
+    conceptPacket,
+    s3,
+    s4,
+    station,
+    s3Tab,
+    s4Tab,
+  ]);
+
+  // Navigation helpers
+  function nextStation() {
+    setStation((s) => clamp(s + 1, 1, 4));
+  }
+  function prevStation() {
+    setStation((s) => clamp(s - 1, 1, 4));
+  }
+
+  function resetAll() {
+    setStation(1);
+    setFunctionRole("protect");
+    setFeelingTone("brave");
+    setArchetypeMode("auto");
+    setManualArchetype("hero");
+    setBranchId("B");
+    setConceptStyleId("classic");
+
+    setCompare(false);
+    setCompareLayout("2up");
+    setCompareTarget("D");
+    setS3Tab("overview");
+    setS4Tab("import");
+  }
+
+  const isOnboarding = station <= 2;
+
+  return (
+    <div className="min-h-screen bg-zinc-50">
+      <TopBar
+        station={station}
+        branchId={branchId}
+        compare={compare}
+        onToggleCompare={() => setCompare((v) => !v)}
+        onReset={resetAll}
+        onHelp={() => setHelpOpen(true)}
+        onOpenOnboarding={() => setStation(1)}
+        showOnboardingButton={!isOnboarding}
+      />
+
+      <div className="mx-auto max-w-7xl px-4 py-5">
+        {/* Keep stepper visible, but onboarding is fullscreen overlay */}
+        <StationStepper station={station} setStation={setStation} />
+
+        {!isOnboarding && (
+          <>
+            <div className="mt-5 grid grid-cols-12 gap-4">
+              {/* Left rail (tabs) */}
+              <div className="col-span-12 lg:col-span-2">
+                <LeftRail
+                  station={station}
+                  branchId={branchId}
+                  s3Tab={s3Tab}
+                  setS3Tab={setS3Tab}
+                  s4Tab={s4Tab}
+                  setS4Tab={setS4Tab}
+                  compare={compare}
+                />
+              </div>
+
+              {/* Center viewport */}
+              <div className="col-span-12 lg:col-span-7">
+                <Viewport
+                  station={station}
+                  branchId={branchId}
+                  choices={choices}
+                  s3Tab={s3Tab}
+                  s4Tab={s4Tab}
+                  s3={s3}
+                  s4={s4}
+                  compare={compare}
+                  compareLayout={compareLayout}
+                  setCompareLayout={setCompareLayout}
+                  compareTarget={compareTarget}
+                  setCompareTarget={setCompareTarget}
+                  facts={facts}
+                  perf={perf}
+                />
+              </div>
+
+              {/* Right inspector */}
+              <div className="col-span-12 lg:col-span-3">
+                <Inspector
+                  station={station}
+                  branchId={branchId}
+                  choices={choices}
+                  // Station 1 discovery
+                  functionRole={functionRole}
+                  setFunctionRole={setFunctionRole}
+                  feelingTone={feelingTone}
+                  setFeelingTone={setFeelingTone}
+                  archetypeMode={archetypeMode}
+                  setArchetypeMode={setArchetypeMode}
+                  manualArchetype={manualArchetype}
+                  setManualArchetype={setManualArchetype}
+                  derivedArchetype={derivedArchetype}
+                  // Branch + constraints
+                  setBranchId={setBranchId}
+                  setPlatform={setPlatform}
+                  setPov={setPov}
+                  setCameraDistance={setCameraDistance}
+                  // Station 2
+                  conceptStyleId={conceptStyleId}
+                  setConceptStyleId={setConceptStyleId}
+                  conceptPacket={conceptPacket}
+                  // S3/S4
+                  s3Tab={s3Tab}
+                  s4Tab={s4Tab}
+                  s3={s3}
+                  setS3={setS3}
+                  s4={s4}
+                  setS4={setS4}
+                  facts={facts}
+                  perf={perf}
+                  payload={payload}
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs text-zinc-600">
+                Tip: Turn on <span className="font-semibold">Compare</span> to see the same stage across branches.
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={prevStation}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+                <button
+                  onClick={nextStation}
+                  className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800"
+                >
+                  Next <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <FooterNote payload={payload} />
+          </>
+        )}
+      </div>
+
+      {/* Fullscreen onboarding overlay for Stations 1–2 */}
+      <OnboardingOverlay
+        open={isOnboarding}
+        station={station}
+        setStation={setStation}
+        // Station 1
+        functionRole={functionRole}
+        setFunctionRole={setFunctionRole}
+        feelingTone={feelingTone}
+        setFeelingTone={setFeelingTone}
+        archetypeMode={archetypeMode}
+        setArchetypeMode={setArchetypeMode}
+        manualArchetype={manualArchetype}
+        setManualArchetype={setManualArchetype}
+        derivedArchetype={derivedArchetype}
+        archetypeFinal={archetype}
+        // Branch + constraints
+        branchId={branchId}
+        setBranchId={setBranchId}
+        platform={platform}
+        setPlatform={setPlatform}
+        pov={pov}
+        setPov={setPov}
+        cameraDistance={cameraDistance}
+        setCameraDistance={setCameraDistance}
+        // Station 2
+        conceptStyleId={conceptStyleId}
+        setConceptStyleId={setConceptStyleId}
+        conceptPacket={conceptPacket}
+      />
+
+      <Modal open={helpOpen} title="Pipeline Glossary" onClose={() => setHelpOpen(false)}>
+        <div className="grid gap-3">
+          {Object.entries(GLOSSARY).map(([k, v]) => (
+            <div key={k} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+              <div className="text-sm font-bold text-zinc-900">{k.toUpperCase()}</div>
+              <div className="text-sm text-zinc-700">{v}</div>
+            </div>
+          ))}
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// -----------------------------
+// Fullscreen Onboarding (Stations 1–2)
+// -----------------------------
+
+function OnboardingOverlay({
+  open,
+  station,
+  setStation,
+  functionRole,
+  setFunctionRole,
+  feelingTone,
+  setFeelingTone,
+  archetypeMode,
+  setArchetypeMode,
+  manualArchetype,
+  setManualArchetype,
+  derivedArchetype,
+  archetypeFinal,
+  branchId,
+  setBranchId,
+  platform,
+  setPlatform,
+  pov,
+  setPov,
+  cameraDistance,
+  setCameraDistance,
+  conceptStyleId,
+  setConceptStyleId,
+  conceptPacket,
+}) {
+  const step = station; // 1 or 2
+  const aMeta = getArchetypeMeta(archetypeFinal);
+  const derivedMeta = getArchetypeMeta(derivedArchetype);
+
+  const canContinueStep1 = Boolean(functionRole && feelingTone && branchId);
+  const canContinueStep2 = Boolean(conceptStyleId);
+
+  function goNext() {
+    if (step === 1) setStation(2);
+    else setStation(3);
+  }
+  function goBack() {
+    if (step === 2) setStation(1);
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[60] bg-zinc-950/40 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="flex h-full w-full items-center justify-center p-4">
+            <motion.div
+              className="relative h-full w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl"
+              initial={{ y: 18, opacity: 0, scale: 0.99 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 12, opacity: 0, scale: 0.99 }}
+              transition={{ duration: 0.18 }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-6 py-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-sm">
+                    <Eye className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-extrabold text-zinc-900">Guided Onboarding</div>
+                    <div className="text-xs text-zinc-600">
+                      Station {step} of 2 · {STATIONS.find((s) => s.id === step)?.name}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline text-xs text-zinc-500">
+                    Outcome: <span className="font-semibold text-zinc-900">{aMeta.label}</span>
+                    <span className="text-zinc-400"> · </span>
+                    Branch <span className="font-semibold text-zinc-900">{branchId}</span>
+                  </span>
+                  <button
+                    onClick={() => setStation(3)}
+                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+                  >
+                    Skip to Station 3
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="h-[calc(100%-148px)] overflow-auto px-6 py-5">
+                {step === 1 ? (
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-12 lg:col-span-7">
+                      <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                        <div className="text-lg font-extrabold text-zinc-900">
+                          Discover your archetype
+                        </div>
+                        <div className="mt-1 text-sm text-zinc-600">
+                          Choose the character’s <span className="font-semibold">Function</span> and the feeling you want players to have.
+                          This deterministically maps to an archetype (with an optional override).
+                        </div>
+
+                        <Divider />
+
+                        <div className="grid gap-4">
+                          <div>
+                            <div className="text-xs font-bold text-zinc-900">Function</div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                              {FUNCTIONS.map((f) => (
+                                <button
+                                  key={f.id}
+                                  onClick={() => setFunctionRole(f.id)}
+                                  className={cx(
+                                    "rounded-2xl border p-3 text-left transition",
+                                    functionRole === f.id
+                                      ? "border-zinc-900 bg-white"
+                                      : "border-zinc-200 bg-white/70 hover:bg-white"
+                                  )}
+                                >
+                                  <div className="text-sm font-bold text-zinc-900">{f.label}</div>
+                                  <div className="text-xs text-zinc-600">{f.hint}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-xs font-bold text-zinc-900">Feeling</div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                              {FEELINGS.map((f) => (
+                                <button
+                                  key={f.id}
+                                  onClick={() => setFeelingTone(f.id)}
+                                  className={cx(
+                                    "rounded-2xl border p-3 text-left transition",
+                                    feelingTone === f.id
+                                      ? "border-zinc-900 bg-white"
+                                      : "border-zinc-200 bg-white/70 hover:bg-white"
+                                  )}
+                                >
+                                  <div className="text-sm font-bold text-zinc-900">{f.label}</div>
+                                  <div className="text-xs text-zinc-600">{f.hint}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="text-xs font-bold text-zinc-900">Archetype result</div>
+                                <div className="mt-1 text-base font-extrabold text-zinc-900">
+                                  {archetypeMode === "auto" ? derivedMeta.label : aMeta.label}
+                                </div>
+                                <div className="text-xs text-zinc-600">
+                                  {archetypeMode === "auto" ? derivedMeta.hint : aMeta.hint}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <Segmented
+                                  value={archetypeMode}
+                                  onChange={(v) => {
+                                    setArchetypeMode(v);
+                                    if (v === "manual") setManualArchetype(derivedArchetype);
+                                  }}
+                                  options={[
+                                    { value: "auto", label: "Auto" },
+                                    { value: "manual", label: "Override" },
+                                  ]}
+                                />
+                              </div>
+                            </div>
+
+                            {archetypeMode === "manual" && (
+                              <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+                                {ARCHETYPES.map((a) => (
+                                  <button
+                                    key={a.id}
+                                    onClick={() => setManualArchetype(a.id)}
+                                    className={cx(
+                                      "rounded-xl border px-3 py-2 text-left",
+                                      manualArchetype === a.id
+                                        ? "border-zinc-900 bg-zinc-50"
+                                        : "border-zinc-200 hover:bg-zinc-50"
+                                    )}
+                                  >
+                                    <div className="text-sm font-semibold text-zinc-900">{a.label}</div>
+                                    <div className="text-xs text-zinc-600">{a.hint}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-span-12 lg:col-span-5">
+                      <div className="grid gap-4">
+                        <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+                          <div className="text-sm font-extrabold text-zinc-900">Pick a fidelity branch</div>
+                          <div className="mt-2 grid gap-2">
+                            {Object.values(BRANCHES).map((b) => (
+                              <button
+                                key={b.id}
+                                onClick={() => setBranchId(b.id)}
+                                className={cx(
+                                  "rounded-2xl border p-3 text-left",
+                                  branchId === b.id
+                                    ? "border-zinc-900"
+                                    : "border-zinc-200 hover:bg-zinc-50"
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <div className="text-sm font-bold text-zinc-900">
+                                      {b.id}: {b.name}
+                                    </div>
+                                    <div className="mt-1 text-xs text-zinc-600">{b.description}</div>
+                                  </div>
+                                  <span className={cx("rounded-full px-2 py-1 text-xs font-semibold", b.badge)}>
+                                    {b.id}
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+                          <div className="text-sm font-extrabold text-zinc-900">Set constraints</div>
+                          <div className="mt-3 grid gap-2">
+                            <LabelRow label="Platform">
+                              <select
+                                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+                                value={platform}
+                                onChange={(e) => setPlatform(e.target.value)}
+                              >
+                                <option>Console/PC</option>
+                                <option>PC</option>
+                                <option>Switch</option>
+                                <option>Mobile/Switch</option>
+                                <option>Mobile</option>
+                              </select>
+                            </LabelRow>
+                            <LabelRow label="Camera POV">
+                              <select
+                                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+                                value={pov}
+                                onChange={(e) => setPov(e.target.value)}
+                              >
+                                <option>1st Person</option>
+                                <option>3rd Person</option>
+                                <option>Side</option>
+                                <option>Isometric</option>
+                              </select>
+                            </LabelRow>
+                            <LabelRow label="Distance">
+                              <Segmented
+                                value={cameraDistance}
+                                onChange={setCameraDistance}
+                                options={[
+                                  { value: "Close", label: "Close" },
+                                  { value: "Mid", label: "Mid" },
+                                  { value: "Far", label: "Far" },
+                                ]}
+                              />
+                            </LabelRow>
+                          </div>
+
+                          <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+                            <div className="font-bold text-zinc-900">Why this matters</div>
+                            <div className="mt-1">
+                              These choices lock the “target” for Stations 3–4 — how detailed the model is, how many textures,
+                              what rig complexity is reasonable, and the expected performance tradeoffs.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-12 lg:col-span-7">
+                      <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+                        <div className="text-lg font-extrabold text-zinc-900">Station 2 · Concept Art (6 phases)</div>
+                        <div className="mt-1 text-sm text-zinc-600">
+                          Concept art exists to hand off clearly to 3D (or sprites). Choose a concept style; then the pipeline produces a
+                          “handoff packet” that drives Station 3.
+                        </div>
+
+                        <Divider />
+
+                        <div className="grid gap-3">
+                          <div className="text-xs font-bold text-zinc-900">Pipeline</div>
+                          <div className="grid gap-2">
+                            {CONCEPT_PHASES.map((p, idx) => (
+                              <div key={p.id} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <div className="text-sm font-bold text-zinc-900">
+                                      {idx + 1}. {p.label}
+                                    </div>
+                                    <div className="text-xs text-zinc-600">{p.desc}</div>
+                                  </div>
+                                  <Pill tone="neutral">{branchId === "D" ? "2D" : "3D"} handoff</Pill>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <Divider />
+
+                          <div>
+                            <div className="text-xs font-bold text-zinc-900">Concept style</div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                              {CONCEPT_STYLES.map((s) => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => setConceptStyleId(s.id)}
+                                  className={cx(
+                                    "rounded-2xl border p-3 text-left transition",
+                                    conceptStyleId === s.id
+                                      ? "border-zinc-900 bg-zinc-50"
+                                      : "border-zinc-200 hover:bg-zinc-50"
+                                  )}
+                                >
+                                  <div className="text-sm font-bold text-zinc-900">{s.label}</div>
+                                  <div className="text-xs text-zinc-600">{s.hint}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-span-12 lg:col-span-5">
+                      <div className="grid gap-4">
+                        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                          <div className="text-sm font-extrabold text-zinc-900">Handoff packet preview</div>
+                          <div className="mt-1 text-xs text-zinc-600">
+                            Archetype: <span className="font-semibold text-zinc-900">{aMeta.label}</span> · Branch{" "}
+                            <span className="font-semibold text-zinc-900">{branchId}</span>
+                          </div>
+
+                          <Divider />
+
+                          <div className="text-sm font-bold text-zinc-900">{conceptPacket.title}</div>
+                          <div className="mt-1 text-xs text-zinc-700">
+                            Camera note: <span className="font-semibold">{conceptPacket.cameraNote}</span>
+                          </div>
+
+                          <Divider />
+
+                          <div className="text-xs font-bold text-zinc-900">Deliverables</div>
+                          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-zinc-700">
+                            {conceptPacket.deliverables.slice(0, 6).map((d) => (
+                              <li key={d}>{d}</li>
+                            ))}
+                          </ul>
+
+                          <Divider />
+
+                          <div className="text-xs font-bold text-zinc-900">3 prompt starters</div>
+                          <div className="mt-2 grid gap-2">
+                            {conceptPacket.prompts.map((p, i) => (
+                              <div key={i} className="rounded-2xl border border-zinc-200 bg-white p-3 text-xs text-zinc-700">
+                                {p}
+                              </div>
+                            ))}
+                          </div>
+
+                          <Divider />
+
+                          <div className="text-xs font-bold text-zinc-900">Handoff checklist</div>
+                          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-zinc-700">
+                            {conceptPacket.handoffChecklist.map((d) => (
+                              <li key={d}>{d}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+                          <div className="text-sm font-extrabold text-zinc-900">What happens next</div>
+                          <div className="mt-1 text-sm text-zinc-600">
+                            Station 3 uses this packet to decide topology, UVs, baking, and materials. Then Station 4 makes it playable.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-6 py-5">
+                <div className="text-xs text-zinc-600">
+                  {step === 1 ? (
+                    <>
+                      Result:{" "}
+                      <span className="font-semibold text-zinc-900">
+                        {archetypeMode === "auto" ? derivedMeta.label : aMeta.label}
+                      </span>{" "}
+                      · Branch <span className="font-semibold text-zinc-900">{branchId}</span>
+                    </>
+                  ) : (
+                    <>
+                      Ready for Station 3: <span className="font-semibold text-zinc-900">Meshy-style stages</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={goBack}
+                    disabled={step === 1}
+                    className={cx(
+                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm",
+                      step === 1
+                        ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400"
+                        : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
+                    )}
+                  >
+                    <ArrowLeft className="h-4 w-4" /> Back
+                  </button>
+
+                  <button
+                    onClick={goNext}
+                    disabled={step === 1 ? !canContinueStep1 : !canContinueStep2}
+                    className={cx(
+                      "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold shadow-sm",
+                      step === 1
+                        ? canContinueStep1
+                          ? "bg-zinc-900 text-white hover:bg-zinc-800"
+                          : "cursor-not-allowed bg-zinc-200 text-zinc-500"
+                        : canContinueStep2
+                        ? "bg-zinc-900 text-white hover:bg-zinc-800"
+                        : "cursor-not-allowed bg-zinc-200 text-zinc-500"
+                    )}
+                  >
+                    {step === 1 ? (
+                      <>
+                        Continue <ArrowRight className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Enter Station 3 <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// -----------------------------
+// Top Bar + Stepper
+// -----------------------------
+
+function TopBar({
+  station,
+  branchId,
+  compare,
+  onToggleCompare,
+  onReset,
+  onHelp,
+  onOpenOnboarding,
+  showOnboardingButton,
+}) {
+  const b = BRANCHES[branchId];
+  return (
+    <div className="sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-sm">
+            <Eye className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-sm font-extrabold text-zinc-900">CVGM Character Pipeline</div>
+            <div className="text-xs text-zinc-600">
+              Stations 1–2 onboarding · Stations 3–4 Meshy-style
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={cx(
+              "hidden sm:inline-flex rounded-full px-2 py-1 text-xs font-semibold",
+              b.badge
+            )}
+          >
+            Branch {branchId}: {b.name}
+          </span>
+
+          {showOnboardingButton && (
+            <button
+              onClick={onOpenOnboarding}
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
+            >
+              <RefreshCw className="h-4 w-4" /> Onboarding
+            </button>
+          )}
+
+          <button
+            onClick={onToggleCompare}
+            className={cx(
+              "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm",
+              compare
+                ? "border-zinc-900 bg-zinc-900 text-white"
+                : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50"
+            )}
+          >
+            <SplitSquareHorizontal className="h-4 w-4" /> Compare
+          </button>
+
+          <button
+            onClick={onReset}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
+          >
+            <RotateCcw className="h-4 w-4" /> Reset
+          </button>
+
+          <button
+            onClick={onHelp}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
+          >
+            <HelpCircle className="h-4 w-4" /> Help
+          </button>
+
+          <span className="hidden md:inline text-xs text-zinc-500">
+            {STATIONS.find((s) => s.id === station)?.name}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StationStepper({ station, setStation }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        {STATIONS.map((s) => {
+          const active = s.id === station;
+          return (
+            <button
+              key={s.id}
+              onClick={() => setStation(s.id)}
+              className={cx(
+                "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
+                active
+                  ? "bg-zinc-900 text-white"
+                  : "bg-zinc-50 text-zinc-700 hover:bg-zinc-100"
+              )}
+            >
+              <span
+                className={cx(
+                  "flex h-6 w-6 items-center justify-center rounded-lg",
+                  active ? "bg-white/15" : "bg-white"
+                )}
+              >
+                {s.id}
+              </span>
+              <span className="hidden sm:inline">{s.short}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------
+// Left Rail
+// -----------------------------
+
+function LeftRail({ station, branchId, s3Tab, setS3Tab, s4Tab, setS4Tab, compare }) {
+  return (
+    <div className="grid gap-3">
+      <Card title="Tabs">
+        {station === 3 && (
+          <RailList
+            items={STATION3_TABS}
+            activeId={s3Tab}
+            onSelect={setS3Tab}
+            disabledIds={
+              branchId === "D"
+                ? ["modeling", "retopo", "uv", "baking", "texturing", "shader", "rigging", "animation", "handoff"]
+                : []
+            }
+            hintWhenDisabled={
+              branchId === "D"
+                ? "Branch D is 2D-first. Station 3 is optional; go to Station 4 for spritesheet runtime."
+                : null
+            }
+          />
+        )}
+
+        {station === 4 && (
+          <RailList items={STATION4_TABS} activeId={s4Tab} onSelect={setS4Tab} />
+        )}
+
+        {station !== 3 && station !== 4 && (
+          <div className="text-sm text-zinc-600">
+            Stations 1–2 are guided onboarding.
+            <div className="mt-2 text-xs text-zinc-500">Jump to Station 3/4 for the Meshy-style layout.</div>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Compare mode">
+        <div className="text-sm text-zinc-700">
+          {compare ? (
+            <span>
+              <Pill tone="good">ON</Pill> Use 2-up or 4-up layouts in the viewport.
+            </span>
+          ) : (
+            <span>
+              <Pill>OFF</Pill> Turn on Compare in the top bar to visualize tradeoffs.
+            </span>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function RailList({ items, activeId, onSelect, disabledIds = [], hintWhenDisabled }) {
+  const disabled = new Set(disabledIds);
+  return (
+    <div className="grid">
+      {items.map((t) => {
+        const active = t.id === activeId;
+        const isDisabled = disabled.has(t.id);
+        return (
+          <button
+            key={t.id}
+            onClick={() => !isDisabled && onSelect(t.id)}
+            className={cx(
+              "flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold",
+              active ? "bg-zinc-900 text-white" : "hover:bg-zinc-50",
+              isDisabled ? "cursor-not-allowed opacity-45" : ""
+            )}
+            title={isDisabled ? hintWhenDisabled ?? "Disabled" : ""}
+          >
+            <span className="flex items-center gap-2">
+              {active ? <ChevronRight className="h-4 w-4" /> : <span className="h-4 w-4" />}
+              {t.label}
+            </span>
+            {active && <Check className="h-4 w-4" />}
+          </button>
+        );
+      })}
+
+      {disabledIds.length > 0 && hintWhenDisabled && (
+        <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
+          {hintWhenDisabled}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------
+// Viewport
+// -----------------------------
+
+function Viewport({
+  station,
+  branchId,
+  choices,
+  s3Tab,
+  s4Tab,
+  s3,
+  s4,
+  compare,
+  compareLayout,
+  setCompareLayout,
+  compareTarget,
+  setCompareTarget,
+  facts,
+  perf,
+}) {
+  const branch = BRANCHES[branchId];
+
+  const title =
+    station === 3
+      ? `Station 3 · ${STATION3_TABS.find((t) => t.id === s3Tab)?.label}`
+      : station === 4
+      ? `Station 4 · ${STATION4_TABS.find((t) => t.id === s4Tab)?.label}`
+      : `Station ${station}`;
+
+  const subtitle =
+    station === 3
+      ? "Switch stage tabs to reveal how the asset changes. Choices select from prebuilt outputs."
+      : station === 4
+      ? "Engine view: import → controller → performance → runtime → tuning."
+      : "Stations 1–2 are guided onboarding. Continue to Station 3/4.";
+
+  const compareBranches = useMemo(() => {
+    if (!compare) return [branchId];
+    if (compareLayout === "4up") return ["A", "B", "C", "D"];
+    return [branchId, compareTarget];
+  }, [compare, compareLayout, branchId, compareTarget]);
+
+  return (
+    <div className="grid gap-3">
+      <Card
+        title={title}
+        right={
+          <div className="flex items-center gap-2">
+            {compare && (
+              <>
+                <Segmented
+                  value={compareLayout}
+                  onChange={(v) => setCompareLayout(v)}
+                  options={[
+                    { value: "2up", label: "2-up" },
+                    { value: "4up", label: "4-up" },
+                  ]}
+                />
+                {compareLayout === "2up" && (
+                  <select
+                    className="rounded-xl border border-zinc-200 bg-white px-2 py-2 text-sm font-semibold"
+                    value={compareTarget}
+                    onChange={(e) => setCompareTarget(e.target.value)}
+                  >
+                    {["A", "B", "C", "D"].filter((b) => b !== branchId).map((b) => (
+                      <option key={b} value={b}>
+                        Compare vs {b}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </>
+            )}
+            {!compare && (
+              <span className={cx("rounded-full px-2 py-1 text-xs font-semibold", branch.badge)}>
+                Branch {branchId}
+              </span>
+            )}
+          </div>
+        }
+      >
+        <div className="text-sm text-zinc-600">{subtitle}</div>
+      </Card>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        <div className="border-b border-zinc-100 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Pill tone={station === 4 ? "warn" : "neutral"}>
+                {station === 4 ? `FPS ~${perf.fps}` : `Tri estimate ~${facts.tris.toLocaleString()}`}
+              </Pill>
+              <Pill>{branchId === "D" ? facts.tex : `${facts.tex} textures`}</Pill>
+              {branchId !== "D" && <Pill>{facts.bones} bones</Pill>}
+              {branchId !== "D" && <Pill>{facts.clips} clips</Pill>}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <span className="hidden sm:inline">Gameplay distance:</span>
+              <span className="font-semibold text-zinc-800">{choices.cameraDistance}</span>
+              <span className="hidden sm:inline">·</span>
+              <span className="hidden sm:inline">POV:</span>
+              <span className="font-semibold text-zinc-800">{choices.pov}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3">
+          <div
+            className={cx(
+              "grid gap-3",
+              compareBranches.length === 1
+                ? "grid-cols-1"
+                : compareBranches.length === 2
+                ? "grid-cols-1 md:grid-cols-2"
+                : "grid-cols-1 md:grid-cols-2"
+            )}
+          >
+            {compareBranches.map((b) => (
+              <ViewportPanel
+                key={b}
+                station={station}
+                activeBranchId={branchId}
+                panelBranchId={b}
+                s3Tab={s3Tab}
+                s4Tab={s4Tab}
+                s3={s3}
+                s4={s4}
+                choices={choices}
+              />
+            ))}
+          </div>
+
+          {compare && compareLayout === "4up" && (
+            <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+              <div className="font-bold text-zinc-900">Compare mode guide</div>
+              <div className="mt-1">
+                You are seeing the <span className="font-semibold">same stage</span> across A/B/C/D. This is the
+                exhibit’s main learning mechanic: contrasts reveal constraints.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ViewportPanel({ station, activeBranchId, panelBranchId, s3Tab, s4Tab, s3, s4, choices }) {
+  const b = BRANCHES[panelBranchId];
+
+  const panelS3 = useMemo(() => {
+    if (panelBranchId === activeBranchId) return s3;
+    const d = { ...s3 };
+
+    if (panelBranchId === "A") {
+      d.modelingMethod = "Sculpt";
+      d.texturingStyle = "PBR";
+      d.texRes = "4K";
+      d.shaderType = "Standard PBR";
+      d.rigComplexity = "Body+Face";
+      d.animationSource = "Mocap";
+    }
+    if (panelBranchId === "B") {
+      d.modelingMethod = "Poly";
+      d.texturingStyle = "Stylized PBR";
+      d.texRes = "2K";
+      d.shaderType = "Standard PBR";
+      d.rigComplexity = "Body";
+      d.animationSource = "Keyframe";
+    }
+    if (panelBranchId === "C") {
+      d.modelingMethod = "Poly";
+      d.texturingStyle = "Hand-painted";
+      d.texRes = "2K";
+      d.shaderType = "Toon";
+      d.outline = true;
+      d.rigComplexity = "Body";
+      d.animationSource = "Keyframe";
+    }
+    if (panelBranchId === "D") {
+      d.shaderType = "Unlit";
+      d.texturingStyle = "Palette";
+      d.animationSource = "Spritesheet";
+    }
+
+    return d;
+  }, [panelBranchId, activeBranchId, s3]);
+
+  const panelS4 = useMemo(() => {
+    if (panelBranchId === activeBranchId) return s4;
+    const d = { ...s4 };
+    if (panelBranchId === "D") {
+      d.spriteRes = "SD";
+      d.qualityPreset = "Performance";
+      d.postfx = "None";
+      d.shadows = false;
+    }
+    if (panelBranchId === "A") {
+      d.qualityPreset = "Balanced";
+      d.postfx = "Full";
+      d.shadows = true;
+    }
+    return d;
+  }, [panelBranchId, activeBranchId, s4]);
+
+  const panelFacts = useMemo(
+    () => computeAssetFacts({ branchId: panelBranchId, s3: panelS3, s4: panelS4 }),
+    [panelBranchId, panelS3, panelS4]
+  );
+
+  const panelPerf = useMemo(
+    () => computePerformance({ branchId: panelBranchId, s4: panelS4, facts: panelFacts }),
+    [panelBranchId, panelS4, panelFacts]
+  );
+
+  const stageLabel =
+    station === 3
+      ? STATION3_TABS.find((t) => t.id === s3Tab)?.label
+      : station === 4
+      ? STATION4_TABS.find((t) => t.id === s4Tab)?.label
+      : "";
+
+  const styleToken = useMemo(() => {
+    if (panelBranchId === "A")
+      return {
+        bg: "from-zinc-900 to-zinc-700",
+        glow:
+          "shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_30px_70px_-30px_rgba(0,0,0,0.45)]",
+      };
+    if (panelBranchId === "B")
+      return {
+        bg: "from-slate-800 to-slate-600",
+        glow:
+          "shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_30px_70px_-30px_rgba(2,132,199,0.25)]",
+      };
+    if (panelBranchId === "C")
+      return {
+        bg: "from-indigo-900 to-fuchsia-700",
+        glow:
+          "shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_30px_70px_-30px_rgba(124,58,237,0.35)]",
+      };
+    return {
+      bg: "from-emerald-900 to-emerald-700",
+      glow:
+        "shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_30px_70px_-30px_rgba(16,185,129,0.35)]",
+    };
+  }, [panelBranchId]);
+
+  const is2D = panelBranchId === "D";
+
+  return (
+    <div className={cx("relative overflow-hidden rounded-2xl border border-zinc-200", b.color)}>
+      <div className="flex items-center justify-between border-b border-zinc-200/60 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className={cx("rounded-full px-2 py-1 text-xs font-semibold", b.badge)}>
+            Branch {panelBranchId}
+          </span>
+          <span className="text-xs font-semibold text-zinc-700">{stageLabel}</span>
+        </div>
+        <div className="text-xs text-zinc-600">
+          {station === 4 ? `FPS ~${panelPerf.fps}` : `~${panelFacts.tris.toLocaleString()} tris`}
+        </div>
+      </div>
+
+      <div className="p-3">
+        <div className={cx("relative h-[320px] rounded-2xl bg-gradient-to-br", styleToken.bg, styleToken.glow)}>
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
+            <div className="flex items-center gap-2">
+              <Pill tone="neutral">{choices.pov}</Pill>
+              <Pill tone="neutral">{choices.cameraDistance}</Pill>
+              <Pill tone={station === 4 ? "warn" : "neutral"}>{is2D ? panelFacts.tex : `${panelFacts.tex}`}</Pill>
+            </div>
+            <div className="text-xs font-semibold text-white/80">
+              {station === 3
+                ? renderS3Overlay(s3Tab, panelS3, panelFacts, panelBranchId)
+                : renderS4Overlay(s4Tab, panelS4, panelPerf, panelBranchId)}
+            </div>
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center">
+            {is2D ? (
+              <SpritePlaceholder s4={panelS4} />
+            ) : (
+              <CharacterPlaceholder s3={panelS3} s3Tab={s3Tab} branchId={panelBranchId} />
+            )}
+          </div>
+
+          <div className="absolute inset-x-0 bottom-0 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs text-white/85">
+                <span className="font-semibold">Asset facts:</span>
+                {!is2D && <span>{panelFacts.bones} bones</span>}
+                {!is2D && <span>·</span>}
+                {!is2D && <span>{panelFacts.clips} clips</span>}
+                {!is2D && <span>·</span>}
+                <span>{station === 4 ? `crowd x${panelPerf.crowd}` : `${panelFacts.memMB}MB est.`}</span>
+              </div>
+              <div className="text-xs text-white/70">
+                {station === 3 && s3Tab === "baking" && is3DBranch(panelBranchId)
+                  ? "Baking ON preserves high detail at low cost"
+                  : ""}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-2">
+          <MiniLegend
+            station={station}
+            s3Tab={s3Tab}
+            s4Tab={s4Tab}
+            branchId={panelBranchId}
+            s3={panelS3}
+            s4={panelS4}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function renderS3Overlay(tab, s3, facts, branchId) {
+  if (branchId === "D") return "2D-first path";
+  switch (tab) {
+    case "overview":
+      return "Stage map (same character transforms)";
+    case "modeling":
+      return `Modeling: ${s3.modelingMethod}`;
+    case "retopo":
+      return `Retopo budget: ${s3.platformBudget}`;
+    case "uv":
+      return `UV: ${s3.uvQuality} · Texel ${s3.texelDensity}`;
+    case "baking":
+      return `Maps: N${s3.maps.normal ? "✓" : "—"} AO${s3.maps.ao ? "✓" : "—"} C${s3.maps.curvature ? "✓" : "—"}`;
+    case "texturing":
+      return `Texturing: ${s3.texturingStyle} · ${s3.texRes}`;
+    case "shader":
+      return `Shader: ${s3.shaderType}${s3.outline ? " +Outline" : ""}`;
+    case "rigging":
+      return `Rig: ${s3.rigComplexity}`;
+    case "animation":
+      return `Animation: ${s3.animationSource}`;
+    case "handoff":
+      return `Export: mesh + textures + rig + clips`;
+    default:
+      return `~${facts.tris.toLocaleString()} tris`;
+  }
+}
+
+function renderS4Overlay(tab, s4, perf, branchId) {
+  if (branchId === "D") {
+    if (tab === "import") return `Spritesheet: ${s4.spriteRes}`;
+    if (tab === "controller") return `Sprite states: ${s4.spriteStateMode}`;
+  }
+  switch (tab) {
+    case "import":
+      return `Import preset: ${s4.importPreset}`;
+    case "stats":
+      return `LOD ${s4.lod} · crowd x${perf.crowd}`;
+    case "controller":
+      return `Transitions: ${s4.transitions}`;
+    case "performance":
+      return `Quality: ${s4.qualityPreset}`;
+    case "runtime":
+      return `Movement: ${s4.movement}`;
+    case "tuning":
+      return `Speed ${s4.speed} · HP ${s4.hp}`;
+    case "demo":
+      return `FPS ~${perf.fps}`;
+    default:
+      return `FPS ~${perf.fps}`;
+  }
+}
+
+function CharacterPlaceholder({ s3, s3Tab, branchId }) {
+  const accent = branchId === "A" ? "bg-rose-400" : branchId === "B" ? "bg-sky-400" : "bg-violet-400";
+  const label =
+    s3Tab === "modeling"
+      ? s3.modelingMethod === "Sculpt"
+        ? "High-poly sculpt"
+        : "Poly blockout"
+      : s3Tab === "retopo"
+      ? "Game-ready topology"
+      : s3Tab === "uv"
+      ? "UV unwrapped"
+      : s3Tab === "baking"
+      ? "Baked detail maps"
+      : s3Tab === "texturing"
+      ? s3.texturingStyle
+      : s3Tab === "shader"
+      ? s3.shaderType
+      : s3Tab === "rigging"
+      ? s3.rigComplexity === "Body+Face"
+        ? "Body + Face rig"
+        : "Body rig"
+      : s3Tab === "animation"
+      ? s3.animationSource
+      : s3Tab === "handoff"
+      ? "Engine-ready package"
+      : "Character viewport";
+
+  const overlays = [];
+  if (s3Tab === "retopo") overlays.push("Edge flow");
+  if (s3Tab === "uv") overlays.push("Checker");
+  if (s3Tab === "rigging") overlays.push("Skeleton");
+  if (s3Tab === "shader" && s3.outline) overlays.push("Outline");
+
+  return (
+    <div className="relative">
+      <div className="mx-auto flex h-56 w-44 flex-col items-center justify-end">
+        <div className={cx("h-24 w-24 rounded-3xl", accent)} />
+        <div className="mt-2 h-24 w-32 rounded-3xl bg-white/20" />
+      </div>
+      <div className="absolute inset-x-0 -bottom-6 mx-auto w-[260px] rounded-2xl bg-white/10 px-3 py-2 text-center text-xs font-semibold text-white/90 backdrop-blur">
+        {label}
+        {overlays.length > 0 && (
+          <div className="mt-1 text-[11px] font-medium text-white/70">
+            overlays: {overlays.join(" · ")}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SpritePlaceholder({ s4 }) {
+  const frames = s4.spriteRes === "HD" ? 8 : 4;
+  return (
+    <div className="w-full max-w-[420px] px-6">
+      <div className="rounded-2xl bg-white/10 p-3 text-white/85 backdrop-blur">
+        <div className="text-xs font-semibold">Spritesheet</div>
+        <div className="mt-2 grid grid-cols-8 gap-1">
+          {Array.from({ length: frames }).map((_, i) => (
+            <div key={i} className="aspect-square rounded-lg bg-white/15" title={`frame ${i + 1}`} />
+          ))}
+        </div>
+        <div className="mt-2 text-[11px] text-white/70">
+          Switching mode: <span className="font-semibold">{s4.spriteStateMode}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniLegend({ station, s3Tab, s4Tab, branchId, s3, s4 }) {
+  const items = [];
+
+  if (station === 3) {
+    if (branchId === "D") {
+      items.push({ k: "2D path", v: "Station 3 optional. Focus on spritesheets in Station 4." });
+    } else {
+      if (s3Tab === "modeling") {
+        items.push({ k: "Choice", v: "Sculpting captures detail; poly modeling emphasizes readable forms." });
+        items.push({ k: "Why it matters", v: "Modeling method affects retopo, baking, and performance." });
+      }
+      if (s3Tab === "retopo") {
+        items.push({ k: "Choice", v: "Platform budget changes polygon targets and deformation topology." });
+        items.push({ k: "Why it matters", v: "Cleaner edge flow reduces animation issues." });
+      }
+      if (s3Tab === "uv") {
+        items.push({ k: "Choice", v: "UV quality + texel density control texture clarity and stretching." });
+      }
+      if (s3Tab === "baking") {
+        items.push({ k: "Choice", v: "Normal/AO/curvature maps preserve sculpt detail cheaply." });
+      }
+      if (s3Tab === "texturing") {
+        items.push({ k: "Choice", v: "PBR vs hand-painted changes realism vs art-direction control." });
+      }
+      if (s3Tab === "shader") {
+        items.push({ k: "Choice", v: "Shader defines lighting response (PBR vs toon vs unlit)." });
+      }
+      if (s3Tab === "rigging") {
+        items.push({ k: "Choice", v: "Body-only vs face rig increases expressiveness and cost." });
+      }
+      if (s3Tab === "animation") {
+        items.push({ k: "Choice", v: "Mocap realism vs keyframe stylization vs presets for speed." });
+      }
+      if (s3Tab === "handoff") {
+        items.push({ k: "Output", v: "Engine-ready package: mesh + textures + materials + rig + clips + metadata." });
+      }
+      if (s3Tab === "overview") {
+        items.push({ k: "Core idea", v: "Same character, different fidelity targets → different production work." });
+      }
+    }
+  }
+
+  if (station === 4) {
+    if (s4Tab === "import") {
+      items.push({ k: "Core idea", v: "Engines require structured assets: scale, orientation, naming, materials." });
+      if (branchId === "D") items.push({ k: "2D", v: "Spritesheets import as textures; logic switches frames/states." });
+    }
+    if (s4Tab === "stats") {
+      items.push({ k: "Core idea", v: "Quality vs performance is measurable: LOD, crowd test, texture memory." });
+    }
+    if (s4Tab === "controller") {
+      items.push({ k: "Core idea", v: "State machine connects input and clips (Idle↔Run→Attack)." });
+    }
+    if (s4Tab === "performance") {
+      items.push({ k: "Core idea", v: "Presets show tradeoffs: cinematic vs balanced vs performance." });
+    }
+    if (s4Tab === "runtime") {
+      items.push({ k: "Core idea", v: "Characters need collisions, movement rules, and logic—not just visuals." });
+    }
+    if (s4Tab === "tuning") {
+      items.push({ k: "Core idea", v: "Data-driven parameters (speed/HP/cooldowns) tune feel without re-authoring art." });
+    }
+    if (s4Tab === "demo") {
+      items.push({ k: "Payoff", v: "Compare branches side-by-side to see how constraints cascade." });
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      {items.map((it, idx) => (
+        <div key={idx} className="rounded-xl border border-zinc-200 bg-white p-3">
+          <div className="text-xs font-bold text-zinc-900">{it.k}</div>
+          <div className="mt-1 text-xs text-zinc-700">{it.v}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// -----------------------------
+// Inspector
+// -----------------------------
+
+function Inspector({
+  station,
+  branchId,
+  choices,
+  // Station 1 discovery
+  functionRole,
+  setFunctionRole,
+  feelingTone,
+  setFeelingTone,
+  archetypeMode,
+  setArchetypeMode,
+  manualArchetype,
+  setManualArchetype,
+  derivedArchetype,
+  // Branch + constraints
+  setBranchId,
+  setPlatform,
+  setPov,
+  setCameraDistance,
+  // Station 2
+  conceptStyleId,
+  setConceptStyleId,
+  conceptPacket,
+  // S3/S4
+  s3Tab,
+  s4Tab,
+  s3,
+  setS3,
+  s4,
+  setS4,
+  facts,
+  perf,
+  payload,
+}) {
+  const [open, setOpen] = useState({
+    yourChoices: true,
+    stageControls: true,
+    education: true,
+    industry: false,
+    facts: true,
+    takeaway: false,
+  });
+
+  function toggleSection(k) {
+    setOpen((p) => ({ ...p, [k]: !p[k] }));
+  }
+
+  const stageMeta = useMemo(() => {
+    if (station === 3) return { title: "Stage controls", sub: STATION3_TABS.find((t) => t.id === s3Tab)?.label };
+    if (station === 4) return { title: "Engine controls", sub: STATION4_TABS.find((t) => t.id === s4Tab)?.label };
+    return { title: "Controls", sub: "" };
+  }, [station, s3Tab, s4Tab]);
+
+  const derivedMeta = getArchetypeMeta(derivedArchetype);
+
+  return (
+    <div className="grid gap-3">
+      <AccordionCard
+        title="Your Choices"
+        open={open.yourChoices}
+        onToggle={() => toggleSection("yourChoices")}
+        right={
+          <div className="flex items-center gap-2">
+            <Pill>{`Branch ${branchId}`}</Pill>
+            <Pill tone="good">{derivedMeta.label}</Pill>
+          </div>
+        }
+      >
+        <Station1ControlsV2
+          branchId={branchId}
+          choices={choices}
+          // Discovery
+          functionRole={functionRole}
+          setFunctionRole={setFunctionRole}
+          feelingTone={feelingTone}
+          setFeelingTone={setFeelingTone}
+          archetypeMode={archetypeMode}
+          setArchetypeMode={setArchetypeMode}
+          manualArchetype={manualArchetype}
+          setManualArchetype={setManualArchetype}
+          derivedArchetype={derivedArchetype}
+          // Branch + constraints
+          setBranchId={setBranchId}
+          setPlatform={setPlatform}
+          setPov={setPov}
+          setCameraDistance={setCameraDistance}
+          // Station 2 quick edit
+          conceptStyleId={conceptStyleId}
+          setConceptStyleId={setConceptStyleId}
+          conceptPacket={conceptPacket}
+        />
+      </AccordionCard>
+
+      <AccordionCard
+        title={stageMeta.title}
+        subtitle={stageMeta.sub}
+        open={open.stageControls}
+        onToggle={() => toggleSection("stageControls")}
+      >
+        {station === 3 && (
+          <Station3Controls branchId={branchId} s3Tab={s3Tab} s3={s3} setS3={setS3} />
+        )}
+        {station === 4 && (
+          <Station4Controls branchId={branchId} s4Tab={s4Tab} s4={s4} setS4={setS4} />
+        )}
+        {station !== 3 && station !== 4 && (
+          <div className="text-sm text-zinc-700">
+            Stations 1–2 are guided onboarding. Use the Onboarding button in the top bar to revisit.
+          </div>
+        )}
+      </AccordionCard>
+
+      <AccordionCard
+        title="Educational Beats"
+        open={open.education}
+        onToggle={() => toggleSection("education")}
+        right={<Pill tone="good">2 bullets</Pill>}
+      >
+        <EducationalBeats station={station} branchId={branchId} s3Tab={s3Tab} s4Tab={s4Tab} s3={s3} s4={s4} />
+      </AccordionCard>
+
+      <AccordionCard title="Industry Note" open={open.industry} onToggle={() => toggleSection("industry")}>
+        <IndustryNote station={station} s3Tab={s3Tab} s4Tab={s4Tab} branchId={branchId} />
+      </AccordionCard>
+
+      <AccordionCard
+        title="Asset Facts"
+        open={open.facts}
+        onToggle={() => toggleSection("facts")}
+        right={<Pill tone={station === 4 ? "warn" : "neutral"}>{station === 4 ? `FPS ~${perf.fps}` : `${facts.memMB}MB est.`}</Pill>}
+      >
+        <div className="grid gap-2 text-sm text-zinc-700">
+          <div className="flex items-center justify-between">
+            <span>Triangles</span>
+            <span className="font-semibold text-zinc-900">{facts.tris.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Textures</span>
+            <span className="font-semibold text-zinc-900">{facts.tex}</span>
+          </div>
+          {branchId !== "D" && (
+            <>
+              <div className="flex items-center justify-between">
+                <span>Rig bones</span>
+                <span className="font-semibold text-zinc-900">{facts.bones}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Animation clips</span>
+                <span className="font-semibold text-zinc-900">{facts.clips}</span>
+              </div>
+            </>
+          )}
+          <Divider />
+          <div className="text-xs text-zinc-500">These are museum-friendly estimates for learning (not a strict spec).</div>
+        </div>
+      </AccordionCard>
+
+      <AccordionCard
+        title="QR / NFC Payload (Prototype)"
+        open={open.takeaway}
+        onToggle={() => toggleSection("takeaway")}
+        right={<Pill>copy</Pill>}
+      >
+        <PayloadBox payload={payload} />
+      </AccordionCard>
+    </div>
+  );
+}
+
+function AccordionCard({ title, subtitle, right, open, onToggle, children }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <button onClick={onToggle} className="flex w-full items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3">
+        <div className="text-left">
+          <div className="text-sm font-bold text-zinc-900">{title}</div>
+          {subtitle && <div className="text-xs text-zinc-500">{subtitle}</div>}
+        </div>
+        <div className="flex items-center gap-2">
+          {right}
+          <ChevronDown className={cx("h-4 w-4 text-zinc-600 transition", open ? "rotate-180" : "")} />
+        </div>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 py-3">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function Station1ControlsV2({
+  branchId,
+  choices,
+  functionRole,
+  setFunctionRole,
+  feelingTone,
+  setFeelingTone,
+  archetypeMode,
+  setArchetypeMode,
+  manualArchetype,
+  setManualArchetype,
+  derivedArchetype,
+  setBranchId,
+  setPlatform,
+  setPov,
+  setCameraDistance,
+  conceptStyleId,
+  setConceptStyleId,
+  conceptPacket,
+}) {
+  const derivedMeta = getArchetypeMeta(derivedArchetype);
+  const manualMeta = getArchetypeMeta(manualArchetype);
+
+  return (
+    <div className="grid gap-3">
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+        <div className="text-xs font-bold text-zinc-900">Archetype discovery (Function + Feeling)</div>
+        <div className="mt-2 grid gap-3">
+          <div>
+            <div className="text-xs text-zinc-600">Function</div>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {FUNCTIONS.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setFunctionRole(f.id)}
+                  className={cx(
+                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                    functionRole === f.id ? "border-zinc-900 bg-white" : "border-zinc-200 bg-white/70 hover:bg-white"
+                  )}
+                  title={f.hint}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-zinc-600">Feeling</div>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {FEELINGS.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setFeelingTone(f.id)}
+                  className={cx(
+                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                    feelingTone === f.id ? "border-zinc-900 bg-white" : "border-zinc-200 bg-white/70 hover:bg-white"
+                  )}
+                  title={f.hint}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs text-zinc-600">Result</div>
+              <div className="text-sm font-extrabold text-zinc-900">
+                {archetypeMode === "auto" ? derivedMeta.label : manualMeta.label}
+              </div>
+              <div className="text-xs text-zinc-600">
+                {archetypeMode === "auto" ? derivedMeta.hint : manualMeta.hint}
+              </div>
+            </div>
+            <Segmented
+              value={archetypeMode}
+              onChange={(v) => {
+                setArchetypeMode(v);
+                if (v === "manual") setManualArchetype(derivedArchetype);
+              }}
+              options={[
+                { value: "auto", label: "Auto" },
+                { value: "manual", label: "Override" },
+              ]}
+            />
+          </div>
+
+          {archetypeMode === "manual" && (
+            <div className="grid grid-cols-2 gap-2">
+              {ARCHETYPES.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => setManualArchetype(a.id)}
+                  className={cx(
+                    "rounded-xl border px-3 py-2 text-left",
+                    manualArchetype === a.id ? "border-zinc-900 bg-white" : "border-zinc-200 bg-white/70 hover:bg-white"
+                  )}
+                >
+                  <div className="text-xs font-bold text-zinc-900">{a.label}</div>
+                  <div className="text-[11px] text-zinc-600">{a.hint}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Divider />
+
+      <div>
+        <div className="text-xs font-bold text-zinc-900">Fidelity Branch</div>
+        <div className="mt-2 grid gap-2">
+          {Object.values(BRANCHES).map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setBranchId(b.id)}
+              className={cx(
+                "rounded-2xl border p-3 text-left",
+                branchId === b.id ? "border-zinc-900" : "border-zinc-200 hover:bg-zinc-50"
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-bold text-zinc-900">
+                    {b.id}: {b.name}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-600">{b.description}</div>
+                </div>
+                <span className={cx("rounded-full px-2 py-1 text-xs font-semibold", b.badge)}>{b.id}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Divider />
+
+      <div className="grid gap-2">
+        <div className="text-xs font-bold text-zinc-900">Constraints</div>
+        <div className="grid gap-2">
+          <LabelRow label="Platform">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={choices.platform}
+              onChange={(e) => setPlatform(e.target.value)}
+            >
+              <option>Console/PC</option>
+              <option>PC</option>
+              <option>Switch</option>
+              <option>Mobile/Switch</option>
+              <option>Mobile</option>
+            </select>
+          </LabelRow>
+          <LabelRow label="Camera POV">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={choices.pov}
+              onChange={(e) => setPov(e.target.value)}
+            >
+              <option>1st Person</option>
+              <option>3rd Person</option>
+              <option>Side</option>
+              <option>Isometric</option>
+            </select>
+          </LabelRow>
+          <LabelRow label="Distance">
+            <Segmented
+              value={choices.cameraDistance}
+              onChange={setCameraDistance}
+              options={[
+                { value: "Close", label: "Close" },
+                { value: "Mid", label: "Mid" },
+                { value: "Far", label: "Far" },
+              ]}
+            />
+          </LabelRow>
+        </div>
+      </div>
+
+      <Divider />
+
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+        <div className="text-xs font-bold text-zinc-900">Station 2 quick edit</div>
+        <div className="mt-2">
+          <LabelRow label="Concept style">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={conceptStyleId}
+              onChange={(e) => setConceptStyleId(e.target.value)}
+            >
+              {CONCEPT_STYLES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </LabelRow>
+          <div className="mt-2 text-xs text-zinc-600">
+            Preview: <span className="font-semibold text-zinc-900">{conceptPacket.title}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LabelRow({ label, children }) {
+  return (
+    <div className="grid gap-1">
+      <div className="text-xs text-zinc-600">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function Station3Controls({ branchId, s3Tab, s3, setS3 }) {
+  if (branchId === "D") {
+    return (
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+        Branch D is 2D-first. Station 3 can be skipped.
+        <div className="mt-1 text-xs text-zinc-500">Go to Station 4 and open the “Import” and “Controller” tabs.</div>
+      </div>
+    );
+  }
+
+  function update(patch) {
+    setS3((prev) => ({ ...prev, ...patch }));
+  }
+
+  return (
+    <div className="grid gap-3">
+      {s3Tab === "overview" && (
+        <div className="text-sm text-zinc-700">
+          You’re viewing the stage map. Switch tabs to reveal how each step transforms the same character.
+        </div>
+      )}
+
+      {s3Tab === "modeling" && (
+        <>
+          <LabelRow label="Modeling method">
+            <Segmented
+              value={s3.modelingMethod}
+              onChange={(v) => update({ modelingMethod: v })}
+              options={[
+                { value: "Sculpt", label: "Sculpt" },
+                { value: "Poly", label: "Poly" },
+              ]}
+            />
+          </LabelRow>
+          <LabelRow label="Silhouette priority">
+            <Segmented
+              value={s3.silhouettePriority}
+              onChange={(v) => update({ silhouettePriority: v })}
+              options={[
+                { value: "Readability", label: "Readability" },
+                { value: "Detail", label: "Detail" },
+              ]}
+            />
+          </LabelRow>
+        </>
+      )}
+
+      {s3Tab === "retopo" && (
+        <>
+          <LabelRow label="Target platform budget">
+            <Segmented
+              value={s3.platformBudget}
+              onChange={(v) => update({ platformBudget: v })}
+              options={[
+                { value: "Console", label: "Console/PC" },
+                { value: "Switch", label: "Switch" },
+                { value: "Mobile", label: "Mobile" },
+              ]}
+            />
+          </LabelRow>
+          <Toggle
+            checked={s3.showEdgeFlow}
+            onChange={(v) => update({ showEdgeFlow: v })}
+            label="Show edge flow overlay"
+            hint="Highlights deformation zones (knees/elbows/shoulders)."
+          />
+        </>
+      )}
+
+      {s3Tab === "uv" && (
+        <>
+          <LabelRow label="UV layout quality">
+            <Segmented
+              value={s3.uvQuality}
+              onChange={(v) => update({ uvQuality: v })}
+              options={[
+                { value: "Fast", label: "Fast" },
+                { value: "Clean", label: "Clean" },
+              ]}
+            />
+          </LabelRow>
+          <LabelRow label="Texel density">
+            <Segmented
+              value={s3.texelDensity}
+              onChange={(v) => update({ texelDensity: v })}
+              options={[
+                { value: "Low", label: "Low" },
+                { value: "Medium", label: "Med" },
+                { value: "High", label: "High" },
+              ]}
+            />
+          </LabelRow>
+        </>
+      )}
+
+      {s3Tab === "baking" && (
+        <>
+          <div className="text-xs font-bold text-zinc-900">Bake maps</div>
+          <div className="grid gap-2">
+            <Toggle
+              checked={s3.maps.normal}
+              onChange={(v) => update({ maps: { ...s3.maps, normal: v } })}
+              label="Normal map"
+              hint="Transfers high-poly surface detail to low-poly."
+            />
+            <Toggle
+              checked={s3.maps.ao}
+              onChange={(v) => update({ maps: { ...s3.maps, ao: v } })}
+              label="Ambient Occlusion (AO)"
+              hint="Adds subtle contact shadows and depth cues."
+            />
+            <Toggle
+              checked={s3.maps.curvature}
+              onChange={(v) => update({ maps: { ...s3.maps, curvature: v } })}
+              label="Curvature"
+              hint="Useful for edge wear masks / stylized shading."
+            />
+          </div>
+          <div className="text-xs text-zinc-500">
+            For Branch A, baking is typically required. Branch C may bake selectively.
+          </div>
+        </>
+      )}
+
+      {s3Tab === "texturing" && (
+        <>
+          <LabelRow label="Texturing style">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s3.texturingStyle}
+              onChange={(e) => update({ texturingStyle: e.target.value })}
+            >
+              <option>PBR</option>
+              <option>Stylized PBR</option>
+              <option>Hand-painted</option>
+              <option>Flat color</option>
+              <option>Palette</option>
+            </select>
+          </LabelRow>
+          <LabelRow label="Texture resolution">
+            <Segmented
+              value={s3.texRes}
+              onChange={(v) => update({ texRes: v })}
+              options={[
+                { value: "1K", label: "1K" },
+                { value: "2K", label: "2K" },
+                { value: "4K", label: "4K" },
+              ]}
+            />
+          </LabelRow>
+        </>
+      )}
+
+      {s3Tab === "shader" && (
+        <>
+          <LabelRow label="Shader type">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s3.shaderType}
+              onChange={(e) => update({ shaderType: e.target.value })}
+            >
+              <option>Standard PBR</option>
+              <option>Toon</option>
+              <option>Unlit</option>
+            </select>
+          </LabelRow>
+          <Toggle
+            checked={s3.outline}
+            onChange={(v) => update({ outline: v })}
+            label="Outline"
+            hint="Common toon technique for readability."
+          />
+        </>
+      )}
+
+      {s3Tab === "rigging" && (
+        <>
+          <LabelRow label="Rig complexity">
+            <Segmented
+              value={s3.rigComplexity}
+              onChange={(v) => update({ rigComplexity: v })}
+              options={[
+                { value: "Body", label: "Body" },
+                { value: "Body+Face", label: "+Face" },
+              ]}
+            />
+          </LabelRow>
+          <LabelRow label="Controller set">
+            <Segmented
+              value={s3.controllerSet}
+              onChange={(v) => update({ controllerSet: v })}
+              options={[
+                { value: "Basic", label: "Basic" },
+                { value: "Advanced", label: "Advanced" },
+              ]}
+            />
+          </LabelRow>
+        </>
+      )}
+
+      {s3Tab === "animation" && (
+        <>
+          <LabelRow label="Animation source">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s3.animationSource}
+              onChange={(e) => update({ animationSource: e.target.value })}
+            >
+              <option>Keyframe</option>
+              <option>Mocap</option>
+              <option>Preset</option>
+              <option>Spritesheet</option>
+            </select>
+          </LabelRow>
+          <LabelRow label="Clip count">
+            <Segmented
+              value={s3.clipCount}
+              onChange={(v) => update({ clipCount: v })}
+              options={[
+                { value: "Few", label: "Few" },
+                { value: "Many", label: "Many" },
+              ]}
+            />
+          </LabelRow>
+        </>
+      )}
+
+      {s3Tab === "handoff" && (
+        <div className="text-sm text-zinc-700">
+          Export packages the character for the engine: mesh + textures + materials + rig + clips + metadata.
+          <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
+            In a real build, this step maps to consistent file naming and folder structure.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Station4Controls({ branchId, s4Tab, s4, setS4 }) {
+  function update(patch) {
+    setS4((prev) => ({ ...prev, ...patch }));
+  }
+
+  const is2D = branchId === "D";
+
+  return (
+    <div className="grid gap-3">
+      {s4Tab === "import" && (
+        <>
+          <LabelRow label="Import preset">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s4.importPreset}
+              onChange={(e) => update({ importPreset: e.target.value })}
+            >
+              <option>Generic</option>
+              <option>Unity</option>
+              <option>Unreal</option>
+            </select>
+          </LabelRow>
+          <LabelRow label="Scale mode">
+            <Segmented
+              value={s4.scaleMode}
+              onChange={(v) => update({ scaleMode: v })}
+              options={[
+                { value: "Auto", label: "Auto" },
+                { value: "Manual", label: "Manual" },
+              ]}
+            />
+          </LabelRow>
+
+          {is2D && (
+            <>
+              <Divider />
+              <LabelRow label="Spritesheet resolution">
+                <Segmented
+                  value={s4.spriteRes}
+                  onChange={(v) => update({ spriteRes: v })}
+                  options={[
+                    { value: "SD", label: "SD" },
+                    { value: "HD", label: "HD" },
+                  ]}
+                />
+              </LabelRow>
+            </>
+          )}
+        </>
+      )}
+
+      {s4Tab === "stats" && (
+        <>
+          <LabelRow label="LOD">
+            <input
+              type="range"
+              min={0}
+              max={3}
+              value={s4.lod}
+              onChange={(e) => update({ lod: Number(e.target.value) })}
+              className="w-full"
+            />
+            <div className="text-xs text-zinc-600">LOD {s4.lod} (higher = cheaper at distance)</div>
+          </LabelRow>
+
+          <LabelRow label="Crowd test">
+            <Segmented
+              value={s4.crowd}
+              onChange={(v) => update({ crowd: v })}
+              options={[
+                { value: "Off", label: "Off" },
+                { value: "On", label: "On" },
+              ]}
+            />
+          </LabelRow>
+        </>
+      )}
+
+      {s4Tab === "controller" && (
+        <>
+          {!is2D && (
+            <>
+              <LabelRow label="Transitions">
+                <Segmented
+                  value={s4.transitions}
+                  onChange={(v) => update({ transitions: v })}
+                  options={[
+                    { value: "Simple", label: "Simple" },
+                    { value: "Advanced", label: "Advanced" },
+                  ]}
+                />
+              </LabelRow>
+              <LabelRow label="Blend">
+                <Segmented
+                  value={s4.blend}
+                  onChange={(v) => update({ blend: v })}
+                  options={[
+                    { value: "Snappy", label: "Snappy" },
+                    { value: "Smooth", label: "Smooth" },
+                  ]}
+                />
+              </LabelRow>
+            </>
+          )}
+
+          {is2D && (
+            <LabelRow label="Sprite switching">
+              <Segmented
+                value={s4.spriteStateMode}
+                onChange={(v) => update({ spriteStateMode: v })}
+                options={[
+                  { value: "States", label: "States" },
+                  { value: "Frames", label: "Frames" },
+                ]}
+              />
+            </LabelRow>
+          )}
+        </>
+      )}
+
+      {s4Tab === "performance" && (
+        <>
+          <LabelRow label="Quality preset">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s4.qualityPreset}
+              onChange={(e) => update({ qualityPreset: e.target.value })}
+            >
+              <option>Cinematic</option>
+              <option>Balanced</option>
+              <option>Performance</option>
+            </select>
+          </LabelRow>
+          <Toggle
+            checked={s4.shadows}
+            onChange={(v) => update({ shadows: v })}
+            label="Shadows"
+            hint="Shadows improve depth but cost performance."
+          />
+          <LabelRow label="PostFX">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s4.postfx}
+              onChange={(e) => update({ postfx: e.target.value })}
+            >
+              <option>None</option>
+              <option>Minimal</option>
+              <option>Full</option>
+            </select>
+          </LabelRow>
+        </>
+      )}
+
+      {s4Tab === "runtime" && (
+        <>
+          <LabelRow label="Movement">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s4.movement}
+              onChange={(e) => update({ movement: e.target.value })}
+            >
+              <option>Walk</option>
+              <option>Sprint</option>
+              <option>Jump</option>
+            </select>
+          </LabelRow>
+          <Toggle
+            checked={s4.collisionDebug}
+            onChange={(v) => update({ collisionDebug: v })}
+            label="Collision debug"
+            hint="Shows collider shapes used for gameplay."
+          />
+          <LabelRow label="Interaction">
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold"
+              value={s4.interaction}
+              onChange={(e) => update({ interaction: e.target.value })}
+            >
+              <option>Trigger</option>
+              <option>Pick up</option>
+              <option>Push</option>
+            </select>
+          </LabelRow>
+        </>
+      )}
+
+      {s4Tab === "tuning" && (
+        <>
+          <LabelRow label={`Speed (${s4.speed})`}>
+            <input
+              type="range"
+              min={2}
+              max={12}
+              value={s4.speed}
+              onChange={(e) => update({ speed: Number(e.target.value) })}
+              className="w-full"
+            />
+          </LabelRow>
+          <LabelRow label={`HP (${s4.hp})`}>
+            <input
+              type="range"
+              min={25}
+              max={200}
+              value={s4.hp}
+              onChange={(e) => update({ hp: Number(e.target.value) })}
+              className="w-full"
+            />
+          </LabelRow>
+          <LabelRow label={`Attack cooldown (${s4.cooldown.toFixed(1)}s)`}>
+            <input
+              type="range"
+              min={0.2}
+              max={2.5}
+              step={0.1}
+              value={s4.cooldown}
+              onChange={(e) => update({ cooldown: Number(e.target.value) })}
+              className="w-full"
+            />
+          </LabelRow>
+        </>
+      )}
+
+      {s4Tab === "demo" && (
+        <div className="text-sm text-zinc-700">
+          Use Compare mode to view A/B/C/D side-by-side.
+          <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
+            This is where the exhibit delivers its payoff: “constraints cascade.”
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EducationalBeats({ station, branchId, s3Tab, s4Tab, s3, s4 }) {
+  const beats = [];
+
+  if (station === 1) {
+    beats.push("Stations 1–2 are onboarding: function + feeling → archetype, then concept handoff.");
+    beats.push("Early constraints shape every downstream production decision.");
+  }
+
+  if (station === 2) {
+    beats.push("Concept art is iterative—explore broadly before refining.");
+    beats.push("Deliverables exist to hand off clearly to 3D (or sprites).");
+  }
+
+  if (station === 3) {
+    if (branchId === "D") {
+      beats.push("2D pipelines often skip 3D steps; key is readability and palette discipline.");
+      beats.push("Spritesheets still require structure: states, timing, and engine integration.");
+    } else {
+      const m = {
+        overview: [
+          "The same character can require very different production work depending on visual targets.",
+          "Seeing changes stage-by-stage makes the invisible pipeline understandable.",
+        ],
+        modeling: [
+          "Sculpting captures surface detail; poly modeling emphasizes clean, readable forms.",
+          "Modeling decisions affect retopo, baking, and performance budgets.",
+        ],
+        retopo: [
+          "Retopo converts detail into clean topology that deforms well in animation.",
+          "Platform budgets determine how dense your final mesh can be.",
+        ],
+        uv: [
+          "UVs flatten 3D surfaces so textures can be applied without stretching.",
+          "Texel density balances clarity and memory cost.",
+        ],
+        baking: [
+          "Baking transfers high-poly detail to low-poly via maps (normal/AO/curvature).",
+          "This is how games look detailed without rendering millions of polygons.",
+        ],
+        texturing: [
+          "PBR simulates real materials; hand-painted textures prioritize art direction and readability.",
+          "Texture style must match lighting and camera distance.",
+        ],
+        shader: [
+          "Shaders define how light interacts with your character (PBR vs toon vs unlit).",
+          "Stylization often lives in shaders as much as in textures.",
+        ],
+        rigging: [
+          "Rigging creates a skeleton + weights so the mesh bends correctly.",
+          "Facial rigs and blendshapes raise expressiveness—and production cost.",
+        ],
+        animation: [
+          "Mocap captures realism quickly but needs cleanup; keyframe offers stylized control.",
+          "More clips require more controller logic and tuning.",
+        ],
+        handoff: [
+          "Export is packaging: consistent structure keeps the engine pipeline stable.",
+          "Pipelines exist so teams can hand off work without breaking the build.",
+        ],
+      };
+      beats.push(...(m[s3Tab] ?? m.overview));
+    }
+  }
+
+  if (station === 4) {
+    const m = {
+      import: [
+        "Engines read structured assets—scale, orientation, materials, and naming matter.",
+        "Import mistakes cascade into animation, collisions, and performance problems.",
+      ],
+      stats: [
+        "Quality vs performance is measurable: polygons, textures, memory, FPS.",
+        "LOD and crowd tests show why optimization is part of production.",
+      ],
+      controller: [
+        "A controller is a state machine that connects input to clips (Idle↔Run→Attack).",
+        "Transitions and blending prevent animation popping and keep motion believable.",
+      ],
+      performance: [
+        "Different platforms require different compromises (lighting, shadows, effects).",
+        "Performance presets teach how teams hit stable framerate targets.",
+      ],
+      runtime: [
+        "Characters require collisions and rules—not just visuals.",
+        "Gameplay feel comes from code + animation + physics working together.",
+      ],
+      tuning: [
+        "Designers tune numbers without re-authoring art.",
+        "Data-driven parameters let teams iterate quickly and safely.",
+      ],
+      demo: [
+        "Comparison reveals learning: constraints cascade across the pipeline.",
+        "The same archetype can look and behave differently depending on the branch.",
+      ],
+    };
+    if (branchId === "D" && s4Tab === "controller") {
+      beats.length = 0;
+      beats.push("In 2D, controllers switch sprite states/frames based on input.");
+      beats.push("The same logic exists—only the visual representation changes.");
+    } else {
+      beats.push(...(m[s4Tab] ?? m.import));
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      {beats.slice(0, 2).map((b, i) => (
+        <div key={i} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
+          • {b}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IndustryNote({ station, s3Tab, s4Tab, branchId }) {
+  const lines = [];
+
+  if (station === 3) {
+    const map = {
+      overview: ["Common tools: ZBrush/Blender/Maya/Substance + game engines.", "Teams standardize naming and file structures for handoffs."],
+      modeling: ["Sculpting often in ZBrush; poly modeling in Blender/Maya.", "Blockouts validate silhouette early before details."],
+      retopo: ["Retopo tools: Blender/Maya/Topogun; targets depend on platform.", "Edge flow is designed around deformation zones."],
+      uv: ["UVs created in Blender/Maya/RizomUV; checker maps validate stretching.", "Consistent texel density improves visual cohesion."],
+      baking: ["Baking in Substance/Marmoset/Blender; normal/AO are common.", "Baking preserves detail while keeping meshes lightweight."],
+      texturing: ["PBR texturing often in Substance Painter; hand-painted in Photoshop/3DCoat.", "Art direction dictates whether realism or readability wins."],
+      shader: ["Shaders in-engine: Unreal materials / Unity shader graphs.", "Toon looks often combine ramps + outlines + controlled lighting."],
+      rigging: ["Rigging in Maya/Blender; facial rigs use blendshapes.", "Bad weights cause collapse and artifacts in motion."],
+      animation: ["Mocap cleanup often in MotionBuilder/Maya; keyframe in Maya/Blender.", "Controllers manage states and blending."],
+      handoff: ["Exports commonly FBX/GLB + texture sets; validation checklists prevent breakage.", "Metadata (stats, LODs) helps engine teams integrate faster."],
+    };
+    if (branchId === "D") {
+      lines.push("2D pipelines still use production discipline: naming, spritesheet layout, and timing.");
+      lines.push("Engine logic switches frames/states based on input (similar concept to 3D controllers).");
+    } else {
+      lines.push(...(map[s3Tab] ?? map.overview));
+    }
+  }
+
+  if (station === 4) {
+    const map = {
+      import: ["Engines ingest assets with import settings; studios keep presets per project.", "Validation includes scale, normals, materials, and clip naming."],
+      stats: ["Profilers measure CPU/GPU time; budgets exist per platform.", "LOD systems and instancing help scale scenes."],
+      controller: ["Controllers/state machines are core in Unity Animator / Unreal AnimBP.", "Transitions are tuned to match gameplay responsiveness."],
+      performance: ["Graphics settings scale shadows, post-processing, and texture quality.", "Performance targets are set early and enforced continuously."],
+      runtime: ["Collision shapes are simplified for speed; visuals don’t equal physics.", "Gameplay code interacts with animation events and timing."],
+      tuning: ["Parameters live in data tables/ScriptableObjects; designers iterate without touching art.", "Balancing uses telemetry and playtests."],
+      demo: ["Vertical slice proves the pipeline end-to-end before full production.", "Compare mode communicates tradeoffs clearly to non-experts."],
+    };
+    lines.push(...(map[s4Tab] ?? map.import));
+  }
+
+  return (
+    <div className="grid gap-2">
+      {lines.map((l, i) => (
+        <div key={i} className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-700">
+          {l}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PayloadBox({ payload }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(prettyJSON(payload));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      <button
+        onClick={copy}
+        className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+      >
+        <Copy className="h-4 w-4" /> {copied ? "Copied" : "Copy payload"}
+      </button>
+      <pre className="max-h-64 overflow-auto rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-800">
+        {prettyJSON(payload)}
+      </pre>
+      <div className="text-xs text-zinc-500">
+        In the real exhibit, this payload would map to asset IDs (database selection), not raw settings.
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------
+// Footer note
+// -----------------------------
+
+function FooterNote({ payload }) {
+  return (
+    <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-bold text-zinc-900">Prototype status</div>
+          <div className="mt-1 text-sm text-zinc-700">
+            This artifact now includes a guided fullscreen onboarding for{" "}
+            <span className="font-semibold">Stations 1–2</span>, while focusing the Meshy-style layout on{" "}
+            <span className="font-semibold">Station 3</span> and{" "}
+            <span className="font-semibold">Station 4</span> with deterministic branching.
+          </div>
+        </div>
+        <div className="hidden md:block rounded-2xl bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
+          <div className="font-semibold">Next:</div>
+          <div>Swap placeholder viewport for real renders/videos per stage.</div>
+          <div>Replace estimates with exact studio-provided metadata.</div>
+        </div>
+      </div>
+      <div className="mt-3 text-xs text-zinc-500">
+        If you need an HTML export later, this can be embedded in a simple Vite/React template or converted into a static HTML bundle.
+      </div>
+    </div>
+  );
+}
