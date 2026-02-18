@@ -1,0 +1,2096 @@
+import { useState, useRef } from "react";
+
+// ─── DATA ────────────────────────────────────────────────────────────────────
+
+// REPLACED: expanded to 6 + function/emotionalReg + archetypePalette + refs
+const ARCHETYPES = [
+  {
+    id: "guardian",
+    name: "The Guardian",
+    icon: "🛡",
+    keywords: ["Sturdy", "Protective", "Reliable"],
+    shape: "square",
+    function: "protect",
+    emotionalReg: "safe",
+    desc: "Broad shoulders, stable stance, grounded posture. Built to endure and defend.",
+    silhouetteDesc:
+      "Wide, planted silhouette with shield-arm forward. Recognizable by blocky proportions and low center of gravity.",
+    designImplication:
+      "Concept artists will emphasize horizontal lines, thick limbs, and armor coverage. Animation will favor deliberate, weighty movement.",
+    archetypePalette: {
+      name: "Earth & Steel",
+      colors: ["#5C4033", "#8D6E63", "#607D8B", "#90A4AE"],
+      desc: "Warm earth tones anchored by cool steel. Communicates durability.",
+    },
+    refs: ["Reinhardt (Overwatch)", "Link (BOTW)", "Master Chief (Halo)"],
+  },
+  {
+    id: "trickster",
+    name: "The Trickster",
+    icon: "🎭",
+    keywords: ["Quick", "Unpredictable", "Sharp"],
+    shape: "triangle",
+    function: "deceive",
+    emotionalReg: "intrigued",
+    desc: "Angular features, asymmetric design, dynamic pose. Built to surprise and deceive.",
+    silhouetteDesc:
+      "Lean, angular silhouette with exaggerated gestures. Recognizable by sharp angles and asymmetric stance.",
+    designImplication:
+      "Concept artists will emphasize diagonal lines, pointed features, and visual asymmetry. Animation will favor quick, darting movements.",
+    archetypePalette: {
+      name: "High Contrast",
+      colors: ["#212121", "#F44336", "#FFEB3B", "#E0E0E0"],
+      desc: "High-contrast extremes. Danger and energy. Never comfortable.",
+    },
+    refs: ["Loki (Marvel)", "Reaper (Overwatch)", "Sephiroth (FF7)"],
+  },
+  {
+    id: "explorer",
+    name: "The Explorer",
+    icon: "🧭",
+    keywords: ["Agile", "Curious", "Adaptive"],
+    shape: "circle",
+    function: "discover",
+    emotionalReg: "curious",
+    desc: "Lean and ready, forward-leaning posture, equipped for the unknown.",
+    silhouetteDesc:
+      "Medium build with travel gear visible in outline. Recognizable by forward lean and equipment silhouette.",
+    designImplication:
+      "Concept artists will emphasize functional clothing, visible tools/gear, and readiness. Animation will favor fluid, curious movements.",
+    archetypePalette: {
+      name: "Terrain Neutrals",
+      colors: ["#795548", "#A5D6A7", "#80DEEA", "#FFCC02"],
+      desc: "Warm earth base with cool sky accents. Ready for any environment.",
+    },
+    refs: ["Lara Croft", "Nathan Drake", "Aloy (Horizon)"],
+  },
+  {
+    id: "sage",
+    name: "The Sage",
+    icon: "📖",
+    keywords: ["Wise", "Calm", "Observant"],
+    shape: "circle",
+    function: "advise",
+    emotionalReg: "curious",
+    desc: "Composed posture, flowing garments, eyes that see everything.",
+    silhouetteDesc:
+      "Tall, vertical silhouette with flowing robes. Recognizable by elongated proportions and stillness.",
+    designImplication:
+      "Concept artists will emphasize flowing fabrics, symbolic accessories, and composed gestures. Animation will favor slow, purposeful movement.",
+    archetypePalette: {
+      name: "Aged Knowledge",
+      colors: ["#4A148C", "#9575CD", "#C0C0C0", "#FFFDE7"],
+      desc: "Deep purples and aged golds. Mystery and accumulated wisdom.",
+    },
+    refs: ["Gandalf", "Geralt (Witcher)", "Yoda"],
+  },
+  {
+    id: "ruler",
+    name: "The Ruler",
+    icon: "👑",
+    keywords: ["Commanding", "Imposing", "Decisive"],
+    shape: "square",
+    function: "command",
+    emotionalReg: "feared",
+    desc: "Perfectly symmetrical, imposing scale, status materials everywhere.",
+    silhouetteDesc:
+      "Wide, tall symmetrical silhouette. Recognizable by deliberate, authoritative proportions.",
+    designImplication:
+      "Concept artists emphasize symmetry, rich materials, status symbols. Animation will favor slow, deliberate, powerful movement.",
+    archetypePalette: {
+      name: "Power & Status",
+      colors: ["#4A148C", "#FFD700", "#B71C1C", "#212121"],
+      desc: "Royal purple, gold, and crimson. Power has always looked like this.",
+    },
+    refs: ["Ganondorf (Zelda)", "Handsome Jack (BL2)", "Emperor Palpatine"],
+  },
+  {
+    id: "caregiver",
+    name: "The Caregiver",
+    icon: "🤲",
+    keywords: ["Nurturing", "Sacrificial", "Warm"],
+    shape: "circle",
+    function: "protect",
+    emotionalReg: "safe",
+    desc: "Open posture, soft features, warm presence. Built to heal and shelter.",
+    silhouetteDesc:
+      "Round, open silhouette. No sharp angles. Recognizable by welcoming stance.",
+    designImplication:
+      "Concept artists emphasize soft edges, warm palette, open-handed gestures. Animation will favor gentle, deliberate movement.",
+    archetypePalette: {
+      name: "Warmth & Light",
+      colors: ["#E8F5E9", "#A5D6A7", "#FFF9C4", "#FFCC80"],
+      desc: "Soft greens and warm yellows. Safe. Approachable. Never threatening.",
+    },
+    refs: ["Ana (Overwatch)", "Toriel (Undertale)", "Aerith (FF7)"],
+  },
+];
+
+// NEW: archetype questions + map
+const ARCHETYPE_QUESTIONS = {
+  q1: {
+    label: "What is your character's primary function in the world?",
+    sub: "A creative director asks this before briefing any concept artist.",
+    options: [
+      { id: "protect", label: "Protect and endure", sub: "Stand between danger and others", icon: "🛡" },
+      { id: "deceive", label: "Deceive and disrupt", sub: "Chaos as a tool, not a flaw", icon: "🎭" },
+      { id: "discover", label: "Discover and adapt", sub: "The world is an unsolved problem", icon: "🧭" },
+      { id: "advise", label: "Know and advise", sub: "Wisdom as the ultimate power", icon: "📖" },
+      { id: "command", label: "Lead and command", sub: "Order through authority", icon: "👑" },
+    ],
+  },
+  q2: {
+    label: "How should players FEEL about this character at first glance?",
+    sub: "This is the art director's brief to the concept artist. It drives every visual decision.",
+    options: [
+      { id: "safe", label: "Safe / Trusted", sub: "Warm palette, round shapes, open posture", icon: "☀️" },
+      { id: "feared", label: "Feared / Respected", sub: "Cool/dark palette, sharp shapes, closed", icon: "⚡" },
+      { id: "curious", label: "Curious / Intrigued", sub: "Unusual proportions, layered details", icon: "🔍" },
+      { id: "delighted", label: "Delighted / Charmed", sub: "Bright saturated, exaggerated, dynamic", icon: "✨" },
+    ],
+  },
+};
+
+const ARCHETYPE_MAP = {
+  protect: { safe: "guardian", feared: "ruler", curious: "caregiver", delighted: "caregiver" },
+  deceive: { safe: "trickster", feared: "trickster", curious: "trickster", delighted: "trickster" },
+  discover: { safe: "explorer", feared: "explorer", curious: "explorer", delighted: "explorer" },
+  advise: { safe: "sage", feared: "sage", curious: "sage", delighted: "sage" },
+  command: { safe: "ruler", feared: "ruler", curious: "ruler", delighted: "ruler" },
+};
+
+// UPDATED: add platforms + LOD; Branch B polyRange fix; Branch C baking fix; Branch D s4.lod
+const BRANCHES = [
+  {
+    id: "A",
+    name: "Photorealistic",
+    tagline: "You're casting a movie.",
+    color: "#3b5ccc",
+    polyRange: "80K–150K polygons",
+    team: "50+ specialists",
+    timeline: "6–18 months",
+    animation: "Motion capture + cleanup",
+    textures: "4K PBR (4096×4096)",
+    conceptWeight: "HEAVY",
+    platforms: "Console (PS5/XSX), PC — high-spec only",
+    refs: ["Kratos (God of War)", "Arthur Morgan (RDR2)", "Ellie (TLOU)", "Agent 47 (Hitman)"],
+    pipeline: "Sculpt → Retopo → UV → Bake → PBR Tex → PBR Shader → Full Rig + Facial → Mocap",
+    placeholderImg:
+      "Photo-scanned human face with visible skin pores, subsurface scattering on ears, individual hair strands, PBR materials reacting to dynamic lighting — cinematic quality.",
+    s2Exploration: {
+      refType: "Real-world photo collages, material reference studies, anatomical accuracy notes",
+      depth: "HEAVY — Multiple rounds of referenced studies.",
+      packageNote:
+        "Full package + material intent notes: skin shader refs, cloth sim targets, hair groom ref, surface wear/tear logic.",
+    },
+    s3: {
+      modeling: "High-poly sculpting in ZBrush. Organic clay-like surface with millions of polys.",
+      retopo:
+        "ESSENTIAL. Clean edge flow required for realistic deformation during facial mocap.",
+      baking: "ESSENTIAL. Normal, AO, curvature, thickness maps.",
+      texturing:
+        "PBR: Albedo, roughness, metallic, normal maps. Substance Painter. 4K per texture set.",
+      rigging:
+        "FULL rig: Skeleton + skin weights + controllers + facial blendshapes for mocap.",
+      animation:
+        "Motion capture. Roger Clark performed Arthur Morgan over 5 years of capture sessions.",
+      lod:
+        "ESSENTIAL — 4 LOD levels required. LOD0: 80–150K. LOD1: ~40K. LOD2: ~10K. LOD3: ~500 polys. Engine auto-swaps based on camera distance.",
+    },
+    s4: {
+      polyBudget: "80K–150K per character",
+      stateComplexity:
+        "Full state machine with blend trees, layered animations, facial overlay states",
+      perfNote:
+        "At this fidelity, a single character consumes significant GPU budget. LOD systems essential — lower poly counts when far from camera.",
+      runtimeSystems:
+        "Full physics cloth, hair simulation, dynamic lighting response, subsurface scattering shader at runtime",
+    },
+  },
+  {
+    id: "B",
+    name: "Stylized Realism",
+    tagline: "The Pixar sweet spot.",
+    color: "#7C4DFF",
+    polyRange: "25K–60K polygons",
+    team: "10–50 people",
+    timeline: "2–4 months",
+    animation: "Keyframe and/or mocap",
+    textures: "2K PBR-Stylized (2048×2048)",
+    conceptWeight: "MEDIUM-HEAVY",
+    platforms: "Console, PC, and high-end mobile (e.g., Genshin Impact)",
+    refs: ["Link (BOTW)", "Fortnite characters", "Crash Bandicoot", "Cloud (FF7R)"],
+    pipeline: "Sculpt/Poly → Retopo → UV → Bake (opt.) → PBR-Stylized → Flex Shader → Std Rig → KF/Mocap",
+    placeholderImg:
+      "Stylized character with slightly exaggerated proportions, clean readable shapes, vibrant color palette — Pixar/Nintendo quality.",
+    s2Exploration: {
+      refType: "Other game character refs, style guides, mood boards",
+      depth: "Standard exploration depth.",
+      packageNote:
+        "Standard full package: turnaround, expression sheet, pose sheet, final render.",
+    },
+    s3: {
+      modeling: "Sculpting OR poly-modeling depending on specific style needs.",
+      retopo: "STANDARD. Clean edge loops for animation deformation.",
+      baking: "STANDARD. Normal + AO typical.",
+      texturing: "PBR-Stylized: Simplified PBR with artistic color saturation. 2K.",
+      rigging: "Standard rig: Skeleton + skin weights + controllers.",
+      animation: "Keyframe + optional mocap. Hand-posed keys with stylized timing.",
+      lod: "STANDARD — 3 LOD levels typical. LOD0: 25–60K. LOD1: ~10K. LOD2: ~2K.",
+    },
+    s4: {
+      polyBudget: "25K–60K per character",
+      stateComplexity:
+        "Standard state machine: Idle, Run, Jump, Attack, Hit, Death + blend transitions",
+      perfNote:
+        "Sweet spot — expressive characters, efficient enough for many on screen. Crash Bandicoot (1996): ~550 polys, 1/3 of PS1's entire budget.",
+      runtimeSystems:
+        "Simplified cloth/hair physics, dynamic materials, standard lighting model",
+    },
+  },
+  {
+    id: "C",
+    name: "Artistic Unique",
+    tagline: "Every pixel is intentional.",
+    color: "#E91E63",
+    polyRange: "Varies (often 2D)",
+    team: "2–10 people",
+    timeline: "2–8 weeks",
+    animation: "Manual keyframe",
+    textures: "Hand-painted or toon shaded",
+    conceptWeight: "HEAVY",
+    platforms: "Any platform — art direction, not hardware, drives viability",
+    refs: ["Hollow Knight", "Cuphead", "Hades (Zagreus)", "Okami (Amaterasu)"],
+    pipeline: "Sculpt+Poly → UV → Hand-Painted → Toon Shader → Std Rig → Keyframe",
+    placeholderImg:
+      "Highly stylized character with bold outlines, limited but intentional palette, exaggerated proportions serving the game's unique visual identity.",
+    s2Exploration: {
+      refType: "Cultural motifs, unusual geometric forms, fine art traditions",
+      depth: "HEAVY on unique forms.",
+      packageNote:
+        "Emphasizes unique silhouettes and color block-in. Style-specific art direction notes.",
+    },
+    s3: {
+      modeling: "Sculpting + poly combined. Intentionally stylized proportions.",
+      retopo:
+        "SIMPLIFIED. Auto-retopo viable since style forgives imperfect deformation.",
+      baking:
+        "DIFFERENT, NOT SKIPPED. Hand-painted artists bake ambient occlusion and pre-computed light directly into the colour texture. Hades achieves its cinematic lighting this way — it is 'painted in,' not calculated at runtime. Artistic baking vs. technical baking.",
+      texturing:
+        "Hand-painted: Painterly brushwork, toon lighting baked into texture. Hades uses this.",
+      rigging: "Standard rig, simpler facial. Expression through pose/gesture.",
+      animation:
+        "Manual keyframe. Squash & stretch. Every frame intentional.",
+      lod:
+        "REDUCED — 2 LOD levels often sufficient. Style-driven games have fewer on-screen characters requiring LOD transitions.",
+    },
+    s4: {
+      polyBudget: "Varies widely — art style dictates",
+      stateComplexity:
+        "Standard state machine, custom visual transitions (screen shake, ink splash)",
+      perfNote:
+        "Performance budget often spent on visual effects rather than polygon count. Hades runs dozens of animated characters at 60fps.",
+      runtimeSystems:
+        "Custom toon/cel shader, outline rendering, stylized particle effects",
+    },
+  },
+  {
+    id: "D",
+    name: "2D Minimal / Indie",
+    tagline: "Constraints breed icons.",
+    color: "#607D8B",
+    polyRange: "Sprites or 100–5K polys",
+    team: "1–5 people",
+    timeline: "Days to weeks",
+    animation: "Spritesheet / frame-based",
+    textures: "64×64 to 256×256 or pixel art",
+    conceptWeight: "LIGHT",
+    platforms: "Mobile, PC, web, handheld — constraint-free across all targets",
+    refs: ["Steve (Minecraft)", "Sans (Undertale)", "Madeline (Celeste)", "Stardew Valley"],
+    pipeline: "Concept → Sprites/Pixel Art → Spritesheet → Engine",
+    placeholderImg:
+      "Simple, iconic character with extreme economy of detail — pixel art or very low-poly. Every pixel carries maximum meaning.",
+    s2Exploration: {
+      refType:
+        "Silhouette clarity at tiny sizes, limited palette studies, sprite readability tests",
+      depth:
+        "LIGHT — Often goes directly from sketch to implementation.",
+      packageNote:
+        "Lightweight: sprite sheet reference + color palette. No elaborate turnaround needed.",
+    },
+    s3: null,
+    s4: {
+      polyBudget: "Sprites: 0 polys (2D quads). Low-poly 3D: 100–5K",
+      stateComplexity:
+        "Simple state machine or code-driven animation switching. Celeste's tight state control = responsive feel.",
+      perfNote:
+        "Minimal per-character cost means MANY on screen. Minecraft renders thousands of entities. Stardew Valley animates an entire farm.",
+      runtimeSystems:
+        "Sprite renderer, frame-based animation controller, simple collision, code-driven behavior. No physics sim needed.",
+      lod:
+        "IMPLICIT — Sprites handle this via resolution scaling. No manual LOD generation needed.",
+    },
+  },
+];
+
+const SHAPE_LANG = {
+  circle: {
+    label: "Circle",
+    symbol: "●",
+    meaning: "Friendly, approachable, soft",
+    example: "Mario, Kirby",
+    color: "#4FC3F7",
+  },
+  square: {
+    label: "Square",
+    symbol: "■",
+    meaning: "Stable, reliable, strong",
+    example: "Link, Master Chief",
+    color: "#66BB6A",
+  },
+  triangle: {
+    label: "Triangle",
+    symbol: "▲",
+    meaning: "Aggressive, dangerous, dynamic",
+    example: "Kratos, Sephiroth",
+    color: "#EF5350",
+  },
+};
+
+const EXPLORATION_CATEGORIES = [
+  {
+    id: "face",
+    label: "Face Variations",
+    icon: "👤",
+    options: [
+      "Strong jawline, determined eyes, battle scars",
+      "Soft features, expressive brows, kind eyes",
+      "Angular cheekbones, narrow eyes, mysterious",
+      "Round face, wide eyes, youthful energy",
+    ],
+  },
+  {
+    id: "outfit",
+    label: "Outfit Explorations",
+    icon: "👔",
+    options: [
+      "Heavy plate armor with ornate engravings",
+      "Light leather with travel pouches and belts",
+      "Flowing robes with magical sigils",
+      "Practical cloth with improvised repairs",
+    ],
+  },
+  {
+    id: "pose",
+    label: "Pose Studies",
+    icon: "🏃",
+    options: [
+      "Defensive stance, weight forward, shield up",
+      "Dynamic mid-action, lunging or leaping",
+      "Calm standing, arms crossed or at rest",
+      "Crouching, ready to spring into action",
+    ],
+  },
+  {
+    id: "props",
+    label: "Weapon / Props",
+    icon: "⚔️",
+    options: [
+      "Broad sword + tower shield combination",
+      "Dual daggers with hidden mechanism",
+      "Ancient staff with glowing crystal",
+      "Mechanical gauntlet with energy core",
+    ],
+  },
+  {
+    id: "expression",
+    label: "Expression Sketches",
+    icon: "😤",
+    options: [
+      "Stoic determination, slight frown",
+      "Mischievous grin, one eyebrow raised",
+      "Serene focus, meditative calm",
+      "Fierce battle cry, teeth visible",
+    ],
+  },
+];
+
+const SC = ["#e94560", "#f7b731", "#3498db", "#2ecc71"];
+
+// ─── SHARED COMPONENTS ──────────────────────────────────────────────────────
+
+function ProgressBar({ station, step, totalSteps, onBack, canGoBack }) {
+  const names = ["Foundations", "Concept Art", "3D Production", "Engine"];
+  return (
+    <div
+      style={{
+        padding: "9px 14px",
+        background: "rgba(0,0,0,0.65)",
+        borderBottom: "1px solid rgba(255,255,255,0.07)",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        backdropFilter: "blur(12px)",
+        position: "sticky",
+        top: 0,
+        zIndex: 100,
+      }}
+    >
+      {canGoBack && (
+        <button
+          onClick={onBack}
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 7,
+            padding: "5px 10px",
+            color: "rgba(255,255,255,0.55)",
+            fontSize: 10,
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace",
+            flexShrink: 0,
+            transition: "all 0.2s",
+          }}
+        >
+          ← Back
+        </button>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "center" }}>
+        {names.map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 10,
+                fontWeight: 700,
+                fontFamily: "'JetBrains Mono', monospace",
+                background: i < station ? SC[i] : i === station ? SC[i] : "rgba(255,255,255,0.05)",
+                color: i <= station ? "#fff" : "rgba(255,255,255,0.2)",
+                boxShadow: i === station ? `0 0 10px ${SC[i]}44` : "none",
+                transition: "all 0.4s ease",
+              }}
+            >
+              {i + 1}
+            </div>
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: i === station ? 700 : 400,
+                color: i <= station ? "#fff" : "rgba(255,255,255,0.2)",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              {s}
+            </span>
+            {i < 3 && <span style={{ color: "rgba(255,255,255,0.1)", fontSize: 8 }}>→</span>}
+          </div>
+        ))}
+      </div>
+      {step !== undefined && totalSteps && (
+        <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                width: i === step ? 16 : 4,
+                height: 4,
+                borderRadius: 2,
+                background: i <= step ? SC[station] : "rgba(255,255,255,0.08)",
+                transition: "all 0.3s",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Beat({ text, role }) {
+  return (
+    <div
+      style={{
+        background: "linear-gradient(135deg, rgba(249,168,37,0.07), rgba(249,168,37,0.02))",
+        border: "1px solid rgba(249,168,37,0.15)",
+        borderRadius: 9,
+        padding: "11px 14px",
+        margin: "12px 0",
+        position: "relative",
+      }}
+    >
+      <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", background: "#f7b731", borderRadius: "3px 0 0 3px" }} />
+      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.15em", color: "#f7b731", marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
+        💡 BEAT{role ? ` — ${role}` : ""}
+      </div>
+      <div style={{ fontSize: 12, lineHeight: 1.55, color: "rgba(255,255,255,0.75)", fontStyle: "italic" }}>{text}</div>
+    </div>
+  );
+}
+
+function Placeholder({ desc, ratio = "16/9", tint = "rgba(255,255,255,0.02)" }) {
+  return (
+    <div
+      style={{
+        aspectRatio: ratio,
+        background: `linear-gradient(135deg, ${tint}, rgba(0,0,0,0.2))`,
+        borderRadius: 9,
+        border: "1px dashed rgba(255,255,255,0.1)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        textAlign: "center",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.01) 10px, rgba(255,255,255,0.01) 20px)" }} />
+      <div style={{ position: "relative" }}>
+        <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.15em", color: "rgba(255,255,255,0.2)", marginBottom: 5, fontFamily: "'JetBrains Mono', monospace" }}>
+          PLACEHOLDER
+        </div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.45, maxWidth: 360 }}>{desc}</div>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ branchId, small }) {
+  if (!branchId) return null;
+  const b = BRANCHES.find((x) => x.id === branchId);
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        background: b.color + "20",
+        border: `1px solid ${b.color}40`,
+        borderRadius: 5,
+        padding: small ? "1px 7px" : "3px 10px",
+        fontSize: small ? 8.5 : 10,
+        fontWeight: 700,
+        color: b.color,
+        fontFamily: "'JetBrains Mono', monospace",
+      }}
+    >
+      {b.name}
+    </span>
+  );
+}
+
+function Btn({ onClick, label, disabled, color = "#f7b731", textColor = "#000" }) {
+  return (
+    <div style={{ textAlign: "center", marginTop: 18 }}>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        style={{
+          padding: "11px 30px",
+          background: disabled ? "rgba(255,255,255,0.07)" : color,
+          color: disabled ? "rgba(255,255,255,0.2)" : textColor,
+          border: "none",
+          borderRadius: 9,
+          fontSize: 12.5,
+          fontWeight: 700,
+          cursor: disabled ? "default" : "pointer",
+          transition: "all 0.3s",
+          fontFamily: "'Space Grotesk', sans-serif",
+          boxShadow: disabled ? "none" : `0 4px 14px ${color}30`,
+        }}
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
+function Header({ sn, step, total, color, title, sub, bid }) {
+  return (
+    <div style={{ textAlign: "center", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 7, marginBottom: 6, alignItems: "center" }}>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color, fontFamily: "'JetBrains Mono', monospace" }}>
+          STATION {sn} · STEP {step} OF {total}
+        </span>
+        {bid && <Badge branchId={bid} small />}
+      </div>
+      <h1 style={{ fontSize: 23, fontWeight: 800, color: "#fff", margin: 0, fontFamily: "'Space Grotesk', sans-serif" }}>{title}</h1>
+      {sub && <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12.5, marginTop: 5, maxWidth: 520, marginInline: "auto" }}>{sub}</p>}
+    </div>
+  );
+}
+
+function BranchNote({ branch, stage, text }) {
+  return (
+    <div style={{ background: `${branch.color}0c`, border: `1px solid ${branch.color}30`, borderRadius: 7, padding: 9, marginTop: 10 }}>
+      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.15em", color: branch.color, marginBottom: 2, fontFamily: "'JetBrains Mono', monospace" }}>
+        BRANCH {branch.id}
+        {stage ? ` — ${stage}` : ""}
+      </div>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", lineHeight: 1.4 }}>{text}</div>
+    </div>
+  );
+}
+
+const W = { maxWidth: 530, margin: "0 auto" };
+
+// ─── STATION 1 (NEW DISCOVERY FLOW) ─────────────────────────────────────────
+
+function S1_ArchQ1({ onNext }) {
+  const [sel, setSel] = useState(null);
+  const [h, setH] = useState(null);
+  const q = ARCHETYPE_QUESTIONS.q1;
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header
+        sn={1}
+        step={1}
+        total={4}
+        color="#e94560"
+        title="Creative Brief — Part 1"
+        sub="A creative director asks this before briefing any concept artist."
+      />
+      <div style={W}>
+        <Beat
+          text="In a real studio, the first question is never 'what does the character look like?' It's: 'what role does this character serve?' Art style, silhouette, and palette all follow from this answer."
+          role="Creative Director"
+        />
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", margin: "12px 0 8px" }}>{q.label}</div>
+        <div style={{ display: "grid", gap: 7 }}>
+          {q.options.map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setSel(opt.id)}
+              onMouseEnter={() => setH(opt.id)}
+              onMouseLeave={() => setH(null)}
+              style={{
+                background: sel === opt.id ? "rgba(233,69,96,0.1)" : h === opt.id ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)",
+                border: `2px solid ${sel === opt.id ? "#e94560" : "rgba(255,255,255,0.06)"}`,
+                borderRadius: 11,
+                padding: "12px 14px",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "all 0.25s",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>{opt.icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{opt.label}</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{opt.sub}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+        <Btn onClick={() => onNext(sel)} label={sel ? "NEXT: PLAYER FEELING →" : "SELECT A FUNCTION"} disabled={!sel} color="#e94560" textColor="#fff" />
+      </div>
+    </div>
+  );
+}
+
+function S1_ArchQ2({ charFunction, onNext }) {
+  const [sel, setSel] = useState(null);
+  const q = ARCHETYPE_QUESTIONS.q2;
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header
+        sn={1}
+        step={2}
+        total={4}
+        color="#e94560"
+        title="Creative Brief — Part 2"
+        sub="This is the art director's brief to the concept artist. It drives every visual decision."
+      />
+      <div style={W}>
+        <Beat
+          text="The creative director's brief always has two parts: what the character DOES, and how players FEEL about them. The second part is what makes a character iconic. Kratos does the same thing as a hundred warrior archetypes — but the feeling is uniquely his."
+          role="Art Director"
+        />
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", margin: "12px 0 8px" }}>{q.label}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+          {q.options.map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setSel(opt.id)}
+              style={{
+                background: sel === opt.id ? "rgba(233,69,96,0.1)" : "rgba(255,255,255,0.02)",
+                border: `2px solid ${sel === opt.id ? "#e94560" : "rgba(255,255,255,0.06)"}`,
+                borderRadius: 11,
+                padding: "12px 10px",
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 0.25s",
+              }}
+            >
+              <div style={{ fontSize: 24, marginBottom: 5 }}>{opt.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", marginBottom: 3 }}>{opt.label}</div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", lineHeight: 1.4 }}>{opt.sub}</div>
+            </button>
+          ))}
+        </div>
+        <Btn
+          onClick={() => {
+            const archetypeId = ARCHETYPE_MAP[charFunction]?.[sel];
+            const archetype = ARCHETYPES.find((a) => a.id === archetypeId);
+            if (archetype) onNext(archetype, sel);
+          }}
+          label={sel ? "REVEAL ARCHETYPE →" : "SELECT A FEELING"}
+          disabled={!sel}
+          color="#e94560"
+          textColor="#fff"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── STATION 1 (UPDATED) ────────────────────────────────────────────────────
+
+function S1_Branch({ archetype, onSelect }) {
+  const [h, setH] = useState(null);
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header
+        sn={1}
+        step={3}
+        total={4}
+        color="#e94560"
+        title="What's Your Production Context?"
+        sub="Before drawing a single line, every studio asks: how much budget, how many people? Everything follows from this."
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, maxWidth: 600, margin: "10px auto" }}>
+        {BRANCHES.map((b) => (
+          <button
+            key={b.id}
+            onClick={() => onSelect(b)}
+            onMouseEnter={() => setH(b.id)}
+            onMouseLeave={() => setH(null)}
+            style={{
+              background: h === b.id ? `${b.color}12` : "rgba(255,255,255,0.015)",
+              border: `1px solid ${h === b.id ? `${b.color}50` : "rgba(255,255,255,0.05)"}`,
+              borderRadius: 11,
+              padding: "12px 10px",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.3s",
+              transform: h === b.id ? "translateY(-2px)" : "none",
+            }}
+          >
+            <div style={{ fontSize: 9, fontWeight: 800, color: b.color, fontFamily: "'JetBrains Mono', monospace", marginBottom: 3 }}>
+              BRANCH {b.id}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 1 }}>{b.name}</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 7, fontStyle: "italic" }}>{b.tagline}</div>
+            <Placeholder desc={b.placeholderImg} ratio="4/3" tint={b.color + "08"} />
+            <div style={{ marginTop: 7, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
+              {[
+                { l: "Polys", v: b.polyRange },
+                { l: "Team", v: b.team },
+                { l: "Time", v: b.timeline },
+                { l: "Anim", v: b.animation },
+              ].map((s) => (
+                <div key={s.l} style={{ background: "rgba(0,0,0,0.22)", borderRadius: 4, padding: "4px 5px" }}>
+                  <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.22)", fontFamily: "'JetBrains Mono', monospace" }}>
+                    {s.l.toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 5, fontSize: 9, color: "rgba(255,255,255,0.3)" }}>
+              <strong style={{ color: "rgba(255,255,255,0.45)" }}>Platforms:</strong> {b.platforms}
+            </div>
+            <div style={{ marginTop: 5, fontSize: 9, color: "rgba(255,255,255,0.3)" }}>
+              <strong style={{ color: "rgba(255,255,255,0.45)" }}>Ref:</strong> {b.refs.join(", ")}
+            </div>
+            {b.id === "D" && (
+              <div style={{ marginTop: 5, fontSize: 8.5, padding: "2px 7px", background: "rgba(96,125,139,0.12)", borderRadius: 3, color: "#90A4AE", fontFamily: "'JetBrains Mono', monospace" }}>
+                ⚡ Skips 3D → straight to engine
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+      <div style={W}>
+        <Beat
+          text="In a real studio, the first question is never 'what does the character look like?' It's: 'how much budget, how many people?' Mario has a mustache because 1985 hardware couldn't render a mouth. Agent 47 is bald because year-2000 rendering couldn't make hair look good. Fidelity is always a production choice first."
+          role="Executive Producer"
+        />
+      </div>
+    </div>
+  );
+}
+
+function S1_Brief({ archetype, branch, emotionalReg, onConfirm }) {
+  const shape = SHAPE_LANG[archetype.shape];
+  const is2D = branch.id === "D";
+
+  const fnLabel =
+    ARCHETYPE_QUESTIONS.q1.options.find((o) => o.id === archetype.function)?.label || archetype.function;
+  const feelLabel =
+    ARCHETYPE_QUESTIONS.q2.options.find((o) => o.id === emotionalReg)?.label || emotionalReg;
+
+  const rows = [
+    // ── PRODUCTION CONTEXT ──
+    { l: "Fidelity", v: `Branch ${branch.id}: ${branch.name}`, s: branch.tagline, _section: "PRODUCTION CONTEXT" },
+    { l: "Polys", v: branch.polyRange },
+    { l: "Team", v: branch.team },
+    { l: "Timeline", v: branch.timeline },
+    { l: "Platforms", v: branch.platforms },
+    // ── CREATIVE BRIEF ──
+    { l: "Archetype", v: archetype.name, s: archetype.keywords.join(" · "), _section: "CREATIVE BRIEF" },
+    { l: "Function", v: fnLabel },
+    { l: "First Look", v: feelLabel },
+    { l: "Shape", v: `${shape.symbol} ${shape.label} — ${shape.meaning}` },
+    { l: "Palette", v: archetype.archetypePalette.name, s: archetype.archetypePalette.desc },
+    { l: "Pipeline", v: branch.pipeline, s: `→ A pipeline like the one used for: ${branch.refs[0]}` },
+  ];
+
+  const renderRows = () => {
+    const out = [];
+    rows.forEach((item, idx) => {
+      if (item._section) {
+        out.push(
+          <div key={`sec-${idx}`} style={{ marginTop: idx === 0 ? 0 : 10 }}>
+            <div
+              style={{
+                fontSize: 8,
+                fontWeight: 800,
+                letterSpacing: "0.2em",
+                color: "rgba(255,255,255,0.22)",
+                fontFamily: "'JetBrains Mono', monospace",
+                textAlign: "center",
+                marginBottom: 6,
+              }}
+            >
+              {item._section}
+            </div>
+          </div>
+        );
+      }
+      out.push(
+        <div
+          key={item.l}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "6px 9px",
+            background: "rgba(0,0,0,0.18)",
+            borderRadius: 6,
+            gap: 8,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 8,
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.3)",
+              fontFamily: "'JetBrains Mono', monospace",
+              minWidth: 72,
+              paddingTop: 2,
+            }}
+          >
+            {item.l.toUpperCase()}
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, color: "#fff", fontWeight: 600 }}>{item.v}</div>
+            {item.s && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>{item.s}</div>}
+          </div>
+        </div>
+      );
+    });
+    return out;
+  };
+
+  return (
+    <div style={{ padding: "26px 18px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <Header sn={1} step={4} total={4} color="#e94560" title="Your Production Brief" />
+      <div
+        style={{
+          background: "rgba(255,255,255,0.02)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 13,
+          padding: 22,
+          maxWidth: 440,
+          width: "100%",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${branch.color}, #e94560)` }} />
+        <div style={{ textAlign: "center", marginBottom: 14 }}>
+          <div style={{ fontSize: 30 }}>{archetype.icon}</div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: "#fff", margin: "4px 0 0" }}>{archetype.name}</h2>
+        </div>
+
+        <div style={{ display: "grid", gap: 5 }}>{renderRows()}</div>
+
+        <div style={{ display: "flex", gap: 4, justifyContent: "center", marginTop: 10 }}>
+          {archetype.archetypePalette.colors.map((c) => (
+            <div key={c} style={{ width: 24, height: 24, borderRadius: 4, background: c, border: "1px solid rgba(255,255,255,0.08)" }} />
+          ))}
+        </div>
+
+        <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.25)", marginTop: 6, fontStyle: "italic", textAlign: "center" }}>
+          * Same pipeline structure — not the exact studio process
+        </div>
+
+        {is2D && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "7px 10px",
+              background: "rgba(96,125,139,0.1)",
+              border: "1px solid rgba(96,125,139,0.2)",
+              borderRadius: 7,
+            }}
+          >
+            <div style={{ fontSize: 8.5, fontWeight: 700, color: "#90A4AE", fontFamily: "'JetBrains Mono', monospace" }}>⚡ 2D PATH — SKIPS STATION 3</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+              Sprites don't need 3D modeling, rigging, or baking. After concept art, your character goes directly to the engine.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Beat
+        text="Notice: you made two separate decisions — production context (budget/team) and creative brief (character identity). These are two different people's jobs in a real studio. The executive producer owns the top half. The creative director owns the bottom half. Both land on the concept artist's desk together."
+        role="Game Director"
+      />
+
+      <button
+        onClick={onConfirm}
+        style={{
+          marginTop: 10,
+          padding: "12px 32px",
+          background: branch.color,
+          color: "#fff",
+          border: "none",
+          borderRadius: 9,
+          fontSize: 12.5,
+          fontWeight: 700,
+          cursor: "pointer",
+          boxShadow: `0 4px 14px ${branch.color}30`,
+        }}
+      >
+        PROCEED TO CONCEPT ART →
+      </button>
+    </div>
+  );
+}
+
+// ─── STATION 2 (NEW P0) ─────────────────────────────────────────────────────
+
+function S2_P0({ archetype, branch, onNext }) {
+  const [worldTone, setWorldTone] = useState(null);
+  const tones = [
+    {
+      id: "dark",
+      label: "Dark Fantasy",
+      colors: ["#1a0a0a", "#4a1a1a", "#8B0000", "#C0392B"],
+      desc: "Gritty, mature, high contrast. Characters must feel dangerous.",
+    },
+    {
+      id: "bright",
+      label: "Bright Platformer",
+      colors: ["#003366", "#0066CC", "#FFD700", "#FF6600"],
+      desc: "Vibrant, readable, joyful. Characters must pop at small sizes.",
+    },
+    {
+      id: "scifi",
+      label: "Sci-Fi Gritty",
+      colors: ["#0a1628", "#1a3a5c", "#00BFFF", "#7FDBFF"],
+      desc: "Cool, technological, precise. Characters must feel engineered.",
+    },
+    {
+      id: "whimsical",
+      label: "Whimsical Indie",
+      colors: ["#2d5a1b", "#5a8a3a", "#f4d03f", "#e8a0bf"],
+      desc: "Warm, handcrafted, personal. Characters must feel hand-made.",
+    },
+  ];
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header
+        sn={2}
+        step={1}
+        total={8}
+        color="#f7b731"
+        bid={branch.id}
+        title="Art Bible — World Tone"
+        sub="Before designing any character, studios establish the world they live in."
+      />
+      <div style={W}>
+        <Beat
+          text="Real studios define an art bible BEFORE any character design begins. Every character must feel like they belong in the same universe. Fortnite's art bible is why 200+ unique character skins all unmistakably look like Fortnite."
+          role="Art Director"
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 10 }}>
+          {tones.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setWorldTone(t.id)}
+              style={{
+                background: worldTone === t.id ? "rgba(247,183,49,0.08)" : "rgba(255,255,255,0.015)",
+                border: `2px solid ${worldTone === t.id ? "#f7b731" : "rgba(255,255,255,0.05)"}`,
+                borderRadius: 11,
+                padding: 12,
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "all 0.3s",
+              }}
+            >
+              <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
+                {t.colors.map((c) => (
+                  <div key={c} style={{ flex: 1, height: 14, borderRadius: 3, background: c }} />
+                ))}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", marginBottom: 3 }}>{t.label}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>{t.desc}</div>
+            </button>
+          ))}
+        </div>
+        <Btn onClick={() => onNext(worldTone)} label={worldTone ? "PROCEED TO CONCEPT FOUNDATION →" : "SELECT WORLD TONE"} disabled={!worldTone} />
+      </div>
+    </div>
+  );
+}
+
+// ─── STATION 2 (UPDATED COUNTS + PALETTE DIRECTION BLOCK) ────────────────────
+
+function S2_P1({ archetype, branch, onNext }) {
+  const [sel, setSel] = useState(null);
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={2} step={2} total={8} color="#f7b731" bid={branch.id} title="Concept Foundation" sub="Keywords → Shape Language → Silhouette Test" />
+      <div style={W}>
+        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 9, padding: 14, marginBottom: 12 }}>
+          <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.15em", color: "rgba(255,255,255,0.3)", marginBottom: 7, fontFamily: "'JetBrains Mono', monospace" }}>
+            FROM STATION 1
+          </div>
+          <div style={{ display: "flex", gap: 7, marginBottom: 6 }}>
+            <span style={{ fontSize: 20 }}>{archetype.icon}</span>
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "#fff" }}>{archetype.name}</div>
+              <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
+                {archetype.keywords.map((k) => (
+                  <span key={k} style={{ fontSize: 8.5, padding: "1px 5px", borderRadius: 3, background: "#e9456010", color: "#e94560", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
+                    {k}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.45 }}>{archetype.designImplication}</div>
+        </div>
+
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", marginBottom: 7 }}>Select primary shape language:</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, marginBottom: 12 }}>
+          {Object.entries(SHAPE_LANG).map(([key, s]) => (
+            <button
+              key={key}
+              onClick={() => setSel(key)}
+              style={{
+                background: sel === key ? `${s.color}15` : "rgba(255,255,255,0.02)",
+                border: `2px solid ${sel === key ? s.color : "rgba(255,255,255,0.05)"}`,
+                borderRadius: 9,
+                padding: 12,
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 0.3s",
+              }}
+            >
+              <div style={{ fontSize: 30, color: s.color, marginBottom: 3 }}>{s.symbol}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#fff" }}>{s.label}</div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{s.meaning}</div>
+              <div style={{ fontSize: 8, color: s.color, marginTop: 3, fontFamily: "'JetBrains Mono', monospace" }}>{s.example}</div>
+            </button>
+          ))}
+        </div>
+
+        {/* NEW: Archetype palette direction */}
+        <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 9, padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.15em", color: "rgba(255,255,255,0.3)", marginBottom: 6, fontFamily: "'JetBrains Mono', monospace" }}>
+            ARCHETYPE-DERIVED PALETTE DIRECTION
+          </div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 7 }}>
+            Your brief specifies <strong style={{ color: "#fff" }}>{archetype.archetypePalette.name}</strong> — {archetype.archetypePalette.desc}
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {archetype.archetypePalette.colors.map((c) => (
+              <div key={c} style={{ flex: 1, height: 20, borderRadius: 4, background: c }} />
+            ))}
+          </div>
+          <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.25)", marginTop: 5, fontStyle: "italic" }}>
+            Concept artists use archetype-derived palettes as a starting constraint, not a final answer. This is where exploration begins.
+          </div>
+        </div>
+
+        <Placeholder
+          desc={`SILHOUETTE TEST: ${archetype.silhouetteDesc} — Solid black shape against neutral background. Can you recognize them from outline alone?`}
+          ratio="16/10"
+        />
+        <Beat text="Mario = circles (friendly). Kratos = triangles (aggressive). Link = squares (heroic). Shape language is universal across ALL fidelity levels." role="Concept Artist" />
+        <Btn onClick={() => onNext(sel || archetype.shape)} label={sel ? "PROCEED TO EXPLORATION →" : "SELECT A SHAPE"} disabled={!sel} />
+      </div>
+    </div>
+  );
+}
+
+function S2_P2({ archetype, branch, onNext }) {
+  const [sels, setSels] = useState({});
+  const count = Object.keys(sels).length;
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={2} step={3} total={8} color="#f7b731" bid={branch.id} title="Divergent Exploration" sub="Explore dozens of options. Quantity over quality." />
+      <div style={W}>
+        <BranchNote branch={branch} text={`${branch.s2Exploration.refType}. Depth: ${branch.s2Exploration.depth}`} />
+        {EXPLORATION_CATEGORIES.map((cat) => (
+          <div key={cat.id} style={{ marginTop: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+              <span style={{ fontSize: 15 }}>{cat.icon}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: "#fff" }}>{cat.label}</span>
+              {sels[cat.id] !== undefined && <span style={{ fontSize: 8.5, color: "#f7b731", fontFamily: "'JetBrains Mono', monospace" }}>✓</span>}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+              {cat.options.map((opt, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSels((p) => ({ ...p, [cat.id]: idx }))}
+                  style={{
+                    background: sels[cat.id] === idx ? "rgba(247,183,49,0.08)" : "rgba(255,255,255,0.015)",
+                    border: `1px solid ${sels[cat.id] === idx ? "rgba(247,183,49,0.3)" : "rgba(255,255,255,0.04)"}`,
+                    borderRadius: 7,
+                    padding: 6,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <Placeholder desc={opt} ratio="3/2" tint={sels[cat.id] === idx ? "#f7b73108" : undefined} />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <Beat text="A concept artist explores dozens of options. Divergent thinking: generate as many as possible before narrowing. Real folders contain hundreds of unseen sketches." role="Visual Development" />
+        <Btn onClick={() => onNext(sels)} label={count >= 3 ? `CONVERGE (${count} selected) →` : `Select at least 3 (${count}/3)`} disabled={count < 3} />
+      </div>
+    </div>
+  );
+}
+
+function S2_P3({ archetype, branch, sels, onNext }) {
+  const [cand, setCand] = useState(null);
+  const cats = EXPLORATION_CATEGORIES.filter((c) => sels[c.id] !== undefined);
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={2} step={4} total={8} color="#f7b731" bid={branch.id} title="Convergent Selection" sub="Mix and match into a final candidate." />
+      <div style={W}>
+        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 9, padding: 14, marginBottom: 12 }}>
+          <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.15em", color: "rgba(255,255,255,0.3)", marginBottom: 7, fontFamily: "'JetBrains Mono', monospace" }}>
+            YOUR ELEMENTS
+          </div>
+          {cats.map((c) => (
+            <div key={c.id} style={{ display: "flex", gap: 7, alignItems: "center", padding: "5px 8px", background: "rgba(0,0,0,0.18)", borderRadius: 5, marginBottom: 3 }}>
+              <span>{c.icon}</span>
+              <div>
+                <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>{c.label}</div>
+                <div style={{ fontSize: 10.5, color: "#fff" }}>{c.options[sels[c.id]]}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
+          {["Faithful Combination", "Creative Remix"].map((l, i) => (
+            <button
+              key={i}
+              onClick={() => setCand(i)}
+              style={{
+                background: cand === i ? "rgba(247,183,49,0.08)" : "rgba(255,255,255,0.015)",
+                border: `2px solid ${cand === i ? "#f7b731" : "rgba(255,255,255,0.05)"}`,
+                borderRadius: 11,
+                padding: 12,
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 0.3s",
+              }}
+            >
+              <Placeholder
+                desc={i === 0 ? `All selections assembled faithfully for ${archetype.name}.` : `Creative remix — artist reinterprets your selections dynamically.`}
+                ratio="3/4"
+                tint={cand === i ? "#f7b73115" : undefined}
+              />
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: cand === i ? "#f7b731" : "#fff", marginTop: 7 }}>{l}</div>
+            </button>
+          ))}
+        </div>
+        <div style={{ background: "rgba(233,69,96,0.05)", border: "1px solid rgba(233,69,96,0.12)", borderRadius: 7, padding: 8, marginTop: 10 }}>
+          <div style={{ fontSize: 8, fontWeight: 700, color: "#e94560", fontFamily: "'JetBrains Mono', monospace" }}>PLAYTEST FIX</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>Mix-and-match replaces scratch-off (27% "gimmicky", 19% "pointless").</div>
+        </div>
+        <Beat text="From dozens of ideas, select the best elements and combine. Real concept artists mix hair from A with outfit from C. Best designs are fusions." role="Lead Concept Artist" />
+        <Btn onClick={() => onNext(cand)} label={cand !== null ? "PROCEED TO REFINEMENT →" : "SELECT A CANDIDATE"} disabled={cand === null} />
+      </div>
+    </div>
+  );
+}
+
+function S2_P4({ archetype, branch, onNext }) {
+  const [stage, setStage] = useState(0);
+  const [pal, setPal] = useState(null);
+  const stages = ["Rough Sketch", "Clean Lineart", "Color Iterations", "Review"];
+  const desc = [
+    `Loose, gestural drawing of ${archetype.name}. Construction lines visible.`,
+    `Refined into confident, clean lines. Proportions locked, details resolved.`,
+    `3-4 palette variations. Same character, different moods.`,
+    `Does this ${archetype.name} READ correctly? If not, loop repeats.`,
+  ];
+  const pals = [
+    { n: "Warm Earth", c: ["#8B4513", "#D2691E", "#F4A460", "#FFDEAD"] },
+    { n: "Cool Ocean", c: ["#1A5276", "#2E86C1", "#5DADE2", "#AED6F1"] },
+    { n: "Muted Forest", c: ["#2C3E2D", "#4A7C59", "#7FB069", "#B5D89A"] },
+    { n: "Vibrant Ember", c: ["#7B2D26", "#C0392B", "#E74C3C", "#F1948A"] },
+  ];
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={2} step={5} total={8} color="#f7b731" bid={branch.id} title="Refinement Loop" sub="Rough → Clean → Color → Review → Repeat." />
+      <div style={W}>
+        <div style={{ display: "flex", gap: 3, marginBottom: 12 }}>
+          {stages.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => setStage(i)}
+              style={{
+                flex: 1,
+                padding: "7px 4px",
+                background: i <= stage ? "rgba(247,183,49,0.1)" : "rgba(255,255,255,0.02)",
+                border: `1px solid ${i === stage ? "#f7b731" : "rgba(255,255,255,0.04)"}`,
+                borderRadius: 6,
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ fontSize: 7.5, fontWeight: 700, color: i <= stage ? "#f7b731" : "rgba(255,255,255,0.22)", fontFamily: "'JetBrains Mono', monospace" }}>{i + 1}</div>
+              <div style={{ fontSize: 9.5, color: i <= stage ? "#fff" : "rgba(255,255,255,0.3)", fontWeight: i === stage ? 700 : 400 }}>{s}</div>
+            </button>
+          ))}
+        </div>
+
+        <Placeholder desc={desc[stage]} ratio="4/3" />
+
+        {stage === 2 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#fff", marginBottom: 5 }}>Choose palette:</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+              {pals.map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => setPal(i)}
+                  style={{
+                    background: pal === i ? "rgba(247,183,49,0.08)" : "rgba(255,255,255,0.015)",
+                    border: `2px solid ${pal === i ? "#f7b731" : "rgba(255,255,255,0.05)"}`,
+                    borderRadius: 7,
+                    padding: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 2, marginBottom: 3 }}>
+                    {p.c.map((c) => (
+                      <div key={c} style={{ width: 20, height: 20, borderRadius: 3, background: c }} />
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: pal === i ? "#f7b731" : "#fff" }}>{p.n}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {stage === 3 && (
+          <div style={{ display: "flex", gap: 7, justifyContent: "center", marginTop: 10 }}>
+            <button
+              onClick={() => setStage(1)}
+              style={{ padding: "6px 14px", background: "rgba(233,69,96,0.1)", border: "1px solid rgba(233,69,96,0.2)", borderRadius: 6, color: "#e94560", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}
+            >
+              ↺ ADJUST
+            </button>
+            <button
+              style={{ padding: "6px 14px", background: "rgba(46,204,113,0.1)", border: "1px solid rgba(46,204,113,0.2)", borderRadius: 6, color: "#2ecc71", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}
+            >
+              ✓ APPROVED
+            </button>
+          </div>
+        )}
+
+        <Beat text="Concept art is never linear. 5-10 refinement rounds on AAA characters. Does the silhouette read? Do shapes communicate personality? If not, loop back." role="Art Director" />
+        <Btn onClick={onNext} label="DESIGN PACKAGE →" />
+      </div>
+    </div>
+  );
+}
+
+function S2_P5({ archetype, branch, onNext }) {
+  const [tab, setTab] = useState(0);
+  const tabs = [
+    { l: "Turnaround", d: "Front, 3/4, Side, Back views aligned. The modeler's blueprint." },
+    { l: "Expressions", d: "6 core emotions: Happy, Angry, Sad, Surprised, Determined, Neutral." },
+    { l: "Poses", d: "3-4 action poses revealing personality through body language." },
+    { l: "Final", d: "Polished illustration in signature pose with full lighting." },
+  ];
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={2} step={6} total={8} color="#f7b731" bid={branch.id} title="Design Package" sub="The communication package for production." />
+      <div style={W}>
+        <div style={{ display: "flex", gap: 3, marginBottom: 10 }}>
+          {tabs.map((t, i) => (
+            <button
+              key={i}
+              onClick={() => setTab(i)}
+              style={{
+                flex: 1,
+                padding: "8px 3px",
+                background: i === tab ? "rgba(247,183,49,0.1)" : "rgba(255,255,255,0.02)",
+                border: `1px solid ${i === tab ? "#f7b731" : "rgba(255,255,255,0.04)"}`,
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 9.5,
+                fontWeight: i === tab ? 700 : 400,
+                color: i === tab ? "#f7b731" : "rgba(255,255,255,0.35)",
+              }}
+            >
+              {t.l}
+            </button>
+          ))}
+        </div>
+        <Placeholder desc={`${tabs[tab].l.toUpperCase()}: ${tabs[tab].d}`} ratio="4/3" />
+        <BranchNote branch={branch} stage="PACKAGE" text={branch.s2Exploration.packageNote} />
+        <Beat text="This is what a concept artist delivers. Not one drawing — a comprehensive package. Turnaround for modelers. Expressions for riggers. Poses for animators." role="Production Handoff" />
+        <Btn onClick={onNext} label="STYLE CONSISTENCY CHECK →" />
+      </div>
+    </div>
+  );
+}
+
+// NEW: S2_P6 (step 7/8) — style consistency check before handoff
+function S2_P6({ archetype, branch, onNext }) {
+  const [ok, setOk] = useState({ tone: true, silhouette: false, palette: false, readability: false });
+
+  const items = [
+    { k: "tone", l: "Fits the World Tone", d: "Does this character belong in the same universe as everything else?" },
+    { k: "silhouette", l: "Silhouette Reads Instantly", d: "Can you recognize them from outline alone at a glance?" },
+    { k: "palette", l: "Palette Supports Archetype", d: `Is "${archetype.archetypePalette.name}" helping communicate identity?` },
+    { k: "readability", l: "Readable at Game Distance", d: "If you shrink them 4×, do the key shapes still read?" },
+  ];
+
+  const score = Object.values(ok).filter(Boolean).length;
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={2} step={7} total={8} color="#f7b731" bid={branch.id} title="Art Bible Fit — Consistency Check" sub="Before production, studios validate clarity + cohesion." />
+      <div style={W}>
+        <Beat
+          text="This is where a studio prevents expensive mistakes. A character can be beautiful and still be WRONG for the world. Consistency is what makes a game's art feel 'real' as a universe."
+          role="Art Director"
+        />
+        <div style={{ display: "grid", gap: 6 }}>
+          {items.map((it) => (
+            <button
+              key={it.k}
+              onClick={() => setOk((p) => ({ ...p, [it.k]: !p[it.k] }))}
+              style={{
+                background: ok[it.k] ? "rgba(247,183,49,0.08)" : "rgba(255,255,255,0.015)",
+                border: `1px solid ${ok[it.k] ? "rgba(247,183,49,0.35)" : "rgba(255,255,255,0.05)"}`,
+                borderRadius: 10,
+                padding: "10px 12px",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "all 0.2s",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#fff" }}>{it.l}</div>
+                <div style={{ fontSize: 9, color: ok[it.k] ? "#f7b731" : "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace", fontWeight: 800 }}>
+                  {ok[it.k] ? "✓ PASS" : "—"}
+                </div>
+              </div>
+              <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.35)", marginTop: 2, lineHeight: 1.45 }}>{it.d}</div>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 10, background: "rgba(0,0,0,0.22)", borderRadius: 10, padding: 12, textAlign: "center" }}>
+          <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: "0.2em", color: "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace" }}>
+            REVIEW SCORE
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: score >= 3 ? "#2ecc71" : score >= 2 ? "#f7b731" : "#e94560" }}>{score}/4</div>
+          <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.35)" }}>
+            {score >= 3 ? "Ready for production handoff." : "Needs another refinement loop."}
+          </div>
+        </div>
+
+        <Btn onClick={onNext} label="PROCEED TO HANDOFF →" disabled={false} />
+      </div>
+    </div>
+  );
+}
+
+// RENAMED: old S2_P6 becomes S2_P7 (step 8/8)
+function S2_P7({ archetype, branch, onFinish }) {
+  const is2D = branch.id === "D";
+  const nc = is2D ? "#2ecc71" : "#3498db";
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={2} step={8} total={8} color="#f7b731" bid={branch.id} title="Handoff" sub={is2D ? "Sprites go directly to the engine." : "2D package ready for 3D production."} />
+      <div style={W}>
+        <Placeholder
+          desc={
+            is2D
+              ? `SPRITE HANDOFF: Finished sprite sheet of ${archetype.name} packaged for engine import. Animation frames (idle, run, jump, attack) organized in a spritesheet grid.`
+              : `HANDOFF: 2D package of ${archetype.name} lifts and takes dimensional form. Layers separate — silhouette, color, detail — streaming toward 3D entry.`
+          }
+          ratio="16/9"
+          tint={nc + "0a"}
+        />
+        {is2D && (
+          <div style={{ marginTop: 10, background: "rgba(96,125,139,0.08)", border: "1px solid rgba(96,125,139,0.18)", borderRadius: 7, padding: 9 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: "#90A4AE", fontFamily: "'JetBrains Mono', monospace" }}>⚡ SKIPPING STATION 3</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+              2D characters are sprites — flat image sequences, not 3D meshes. Nothing to sculpt, retopologize, UV unwrap, or rig. Sprites ARE the final assets.
+            </div>
+          </div>
+        )}
+        <Beat
+          text={
+            is2D
+              ? "This is why 2D games can be made by tiny teams. The entire 3D pipeline doesn't exist. What takes a 3D team months takes a 2D artist days."
+              : "The handoff moment — the most critical pipeline transition. Everything in 2D now becomes 3D. Package quality determines production efficiency."
+          }
+          role="Production Manager"
+        />
+        <div style={{ textAlign: "center", marginTop: 14 }}>
+          <button
+            onClick={onFinish}
+            style={{
+              padding: "12px 32px",
+              background: nc,
+              color: "#fff",
+              border: "none",
+              borderRadius: 9,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: `0 4px 14px ${nc}30`,
+            }}
+          >
+            {is2D ? "SKIP TO ENGINE →" : "3D PRODUCTION →"}
+          </button>
+          <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.22)", marginTop: 5, fontFamily: "'JetBrains Mono', monospace" }}>
+            Station {is2D ? 4 : 3}: {is2D ? "Engine" : "3D Production"}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── STATION 3 (UPDATED: 9 stages with LOD) ─────────────────────────────────
+
+function S3({ archetype, branch, onFinish }) {
+  const [a, setA] = useState(0);
+
+  const stgs = [
+    { l: "Model", i: "🗿", k: "modeling" },
+    { l: "Retopo", i: "🔺", k: "retopo" },
+    { l: "UV", i: "🗺", k: null },
+    { l: "Bake", i: "🔥", k: "baking" },
+    { l: "Texture", i: "🎨", k: "texturing" },
+    { l: "Shader", i: "✨", k: null },
+    { l: "LOD", i: "📐", k: "lod" },
+    { l: "Rig", i: "🦴", k: "rigging" },
+    { l: "Animate", i: "🏃", k: "animation" },
+  ];
+
+  const beats = [
+    "Sculpting = digital clay. Poly-modeling = Lego. AAA sculpts; indie poly-models.",
+    "Retopology: re-wrapping a sculpture with a net that bends at the right places.",
+    "UV mapping: flattening a globe into a world map. Bad UVs = stretched textures.",
+    "Baking: capturing high-poly detail into texture. An illusion the engine uses.",
+    "God of War = PBR. Hades = hand-painted. Both incredible. Neither is 'better.'",
+    "Shader = recipe for how the engine displays textures. Same model, totally different look.",
+    "Every shipped character exists as 3–5 versions of itself. LOD0 = full detail. LOD3 = a few hundred polygons. The engine swaps automatically based on camera distance. Players never notice — but it saves millions of calculations per frame.",
+    "Rigging builds puppet strings. Without rigging, a character is a statue.",
+    "Mocap records actors. Keyframe is hand-crafted. Cuphead: 50,000 hand-drawn frames over 7 years.",
+  ];
+
+  const note = stgs[a].k
+    ? branch.s3
+      ? branch.s3[stgs[a].k]
+      : "N/A for 2D path"
+    : a === 2
+      ? "All 3D branches need UVs. They define how textures wrap onto surfaces."
+      : "PBR for realism, toon for stylized, unlit for minimal.";
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      <Header sn={3} step={a + 1} total={9} color="#3498db" bid={branch.id} title="3D Production" sub="Same character, every pipeline stage." />
+      <div style={W}>
+        <div style={{ display: "flex", gap: 2, marginBottom: 12, background: "rgba(0,0,0,0.22)", borderRadius: 8, padding: 3 }}>
+          {stgs.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => setA(i)}
+              style={{
+                flex: 1,
+                padding: "7px 1px",
+                background: i === a ? "rgba(52,152,219,0.15)" : "transparent",
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ fontSize: 13 }}>{s.i}</div>
+              <div style={{ fontSize: 6.5, fontWeight: 700, color: i === a ? "#3498db" : "rgba(255,255,255,0.2)", fontFamily: "'JetBrains Mono', monospace" }}>
+                {s.l.toUpperCase()}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <Placeholder desc={`STAGE ${a + 1}: ${stgs[a].l.toUpperCase()} — ${note}`} ratio="16/10" tint="#3498db08" />
+        <BranchNote branch={branch} stage={stgs[a].l.toUpperCase()} text={note} />
+        <Beat text={beats[a]} role="3D / Technical Artist" />
+
+        <div style={{ textAlign: "center", marginTop: 14 }}>
+          {a < 8 ? (
+            <button
+              onClick={() => setA(a + 1)}
+              style={{
+                padding: "10px 24px",
+                background: "#3498db",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                fontSize: 11.5,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              NEXT: {stgs[a + 1]?.l.toUpperCase()} →
+            </button>
+          ) : (
+            <button
+              onClick={onFinish}
+              style={{
+                padding: "12px 32px",
+                background: "#2ecc71",
+                color: "#fff",
+                border: "none",
+                borderRadius: 9,
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(46,204,113,0.3)",
+              }}
+            >
+              PROCEED TO ENGINE →
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── STATION 4 (UPDATED: collision note text) ────────────────────────────────
+
+function StateMachine() {
+  const [act, setAct] = useState("idle");
+  const sts = [
+    { id: "idle", l: "IDLE", c: "#2ecc71" },
+    { id: "run", l: "RUN", c: "#3498db" },
+    { id: "attack", l: "ATTACK", c: "#e94560" },
+    { id: "hit", l: "HIT", c: "#f39c12" },
+    { id: "death", l: "DEATH", c: "#9b59b6" },
+  ];
+  const tr = { idle: ["run", "attack", "hit"], run: ["idle", "attack", "hit"], attack: ["idle", "hit"], hit: ["idle", "death"], death: [] };
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, justifyContent: "center", marginBottom: 8 }}>
+        {sts.map((s) => {
+          const canGo = tr[act]?.includes(s.id);
+          return (
+            <button
+              key={s.id}
+              onClick={() => {
+                if (canGo) setAct(s.id);
+              }}
+              style={{
+                padding: "9px 14px",
+                borderRadius: 7,
+                cursor: canGo ? "pointer" : "default",
+                background: s.id === act ? `${s.c}22` : canGo ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.01)",
+                border: `2px solid ${s.id === act ? s.c : canGo ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.03)"}`,
+                opacity: s.id === act || canGo ? 1 : 0.3,
+                transition: "all 0.3s",
+              }}
+            >
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: s.id === act ? s.c : "#fff", fontFamily: "'JetBrains Mono', monospace" }}>{s.l}</div>
+              {s.id === act && <div style={{ fontSize: 7.5, color: s.c, marginTop: 1 }}>● ACTIVE</div>}
+              {canGo && s.id !== act && <div style={{ fontSize: 7.5, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>→ tap</div>}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ textAlign: "center", fontSize: 9, color: "rgba(255,255,255,0.35)" }}>
+        <strong style={{ color: sts.find((s) => s.id === act).c }}>{act.toUpperCase()}</strong>
+        {tr[act].length > 0 ? ` → ${tr[act].join(", ").toUpperCase()}` : " · FINAL STATE"}
+      </div>
+    </div>
+  );
+}
+
+function PerfSlider({ branch }) {
+  const [chars, setChars] = useState(1);
+  const maxFps = branch.id === "D" ? 120 : branch.id === "C" ? 90 : branch.id === "B" ? 60 : 30;
+
+  const fps = Math.max(
+    5,
+    Math.round(
+      maxFps /
+        (1 +
+          (chars - 1) *
+            (branch.id === "A" ? 0.18 : branch.id === "B" ? 0.08 : branch.id === "C" ? 0.04 : 0.005))
+    )
+  );
+
+  const fc = fps >= 60 ? "#2ecc71" : fps >= 30 ? "#f7b731" : "#e94560";
+
+  return (
+    <div style={{ background: "rgba(0,0,0,0.22)", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+      <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.15em", color: "#2ecc71", marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+        PERFORMANCE SIMULATOR
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)" }}>Characters</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#fff" }}>{chars}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)" }}>FPS</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: fc }}>{fps}</div>
+        </div>
+      </div>
+      <input type="range" min="1" max="50" value={chars} onChange={(e) => setChars(+e.target.value)} style={{ width: "100%", accentColor: "#2ecc71" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
+        <span style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace" }}>1</span>
+        <span style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace" }}>50</span>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 9.5, color: "rgba(255,255,255,0.35)", textAlign: "center" }}>
+        {fps < 30 ? "⚠️ Below 30 — players feel lag" : fps < 60 ? "⚡ 30-60 — acceptable" : "✓ 60+ — smooth"}
+      </div>
+    </div>
+  );
+}
+
+function DataPanel({ archetype }) {
+  const [p, setP] = useState({ speed: 5, jump: 3, dmg: 10, hp: 100 });
+  const items = [
+    { k: "speed", l: "Move Speed", min: 1, max: 15, u: "m/s", i: "💨" },
+    { k: "jump", l: "Jump Height", min: 1, max: 10, u: "m", i: "⬆️" },
+    { k: "dmg", l: "Attack Damage", min: 1, max: 50, u: "dmg", i: "⚔️" },
+    { k: "hp", l: "Max Health", min: 10, max: 500, u: "HP", i: "❤️" },
+  ];
+
+  return (
+    <div style={{ background: "rgba(0,0,0,0.22)", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+      <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.15em", color: "#2ecc71", marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+        PARAMETER TUNING — {archetype.name.toUpperCase()}
+      </div>
+      {items.map((it) => (
+        <div key={it.k} style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+            <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 600 }}>
+              {it.i} {it.l}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#2ecc71", fontFamily: "'JetBrains Mono', monospace" }}>
+              {p[it.k]} {it.u}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={it.min}
+            max={it.max}
+            value={p[it.k]}
+            onChange={(e) => setP((prev) => ({ ...prev, [it.k]: +e.target.value }))}
+            style={{ width: "100%", accentColor: "#2ecc71" }}
+          />
+        </div>
+      ))}
+      <div style={{ padding: "7px 10px", background: "rgba(46,204,113,0.06)", borderRadius: 5, fontSize: 9, color: "rgba(255,255,255,0.45)", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.5 }}>
+        {`{ "${archetype.id}": { speed: ${p.speed}, jump: ${p.jump}, dmg: ${p.dmg}, hp: ${p.hp} } }`}
+      </div>
+    </div>
+  );
+}
+
+function RuntimeToggles() {
+  const [t, setT] = useState({ col: true, skel: false, nav: false, aud: false });
+
+  // UPDATED collision description
+  const sys = [
+    { k: "col", l: "Collision Mesh", c: "#2ecc71", d: "Separate capsule/box — NOT the visual mesh" },
+    { k: "skel", l: "Bones", c: "#f7b731", d: "Animation rig" },
+    { k: "nav", l: "Nav Mesh", c: "#3498db", d: "Walkable areas" },
+    { k: "aud", l: "Audio", c: "#e94560", d: "Sound triggers" },
+  ];
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, margin: "10px 0" }}>
+      {sys.map((s) => (
+        <button
+          key={s.k}
+          onClick={() => setT((p) => ({ ...p, [s.k]: !p[s.k] }))}
+          style={{
+            background: t[s.k] ? `${s.c}10` : "rgba(255,255,255,0.015)",
+            border: `1px solid ${t[s.k] ? `${s.c}40` : "rgba(255,255,255,0.05)"}`,
+            borderRadius: 7,
+            padding: "7px 8px",
+            cursor: "pointer",
+            textAlign: "left",
+            transition: "all 0.2s",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: t[s.k] ? s.c : "rgba(255,255,255,0.12)" }} />
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: t[s.k] ? s.c : "rgba(255,255,255,0.45)", fontFamily: "'JetBrains Mono', monospace" }}>
+              {s.l}
+            </span>
+          </div>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", paddingLeft: 12, marginTop: 1 }}>{s.d}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function S4({ archetype, branch }) {
+  const [step, setStep] = useState(0);
+  const is2D = branch.id === "D";
+  const s4 = branch.s4;
+
+  const content = [
+    // 0: Import
+    <div key={0}>
+      <Header sn={4} step={1} total={6} color="#2ecc71" bid={branch.id} title="Import + Environment" sub="Your character enters the game engine." />
+      <div style={W}>
+        <Placeholder
+          desc={
+            is2D
+              ? `ENGINE IMPORT: ${archetype.name} sprite sheet loaded. 2D quad displays sprite in side-scrolling test environment. Debug: Sprite Size, Frame Count, Animation FPS, Memory.`
+              : `ENGINE IMPORT: ${archetype.name} 3D model in real-time viewport. Test environment with ground, lighting, skybox. Stats: ${branch.polyRange}, Texture Memory, Draw Calls, FPS.`
+          }
+          ratio="16/9"
+          tint="#2ecc710a"
+        />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, margin: "10px 0" }}>
+          {[
+            { l: "POLY BUDGET", v: s4.polyBudget },
+            { l: "DRAW CALLS", v: is2D ? "1 per sprite" : "Varies" },
+            { l: "MEMORY", v: is2D ? "< 1MB" : "50-200MB" },
+            { l: "LOD", v: s4.lod || (branch.id === "D" ? "Implicit" : "Varies") },
+          ].map((s) => (
+            <div key={s.l} style={{ background: "rgba(0,0,0,0.22)", borderRadius: 6, padding: "7px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 7, fontWeight: 700, color: "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace" }}>{s.l}</div>
+              <div style={{ fontSize: 9.5, color: "#2ecc71", marginTop: 2, fontWeight: 600 }}>{s.v}</div>
+            </div>
+          ))}
+        </div>
+
+        <Beat
+          text={`Moment of truth. Every decision from Stations 1-${is2D ? "2" : "3"} converges. The engine doesn't care about art beauty — only polygons, memory, and frame rate.`}
+          role="Engine Programmer"
+        />
+      </div>
+    </div>,
+
+    // 1: State Machine
+    <div key={1}>
+      <Header sn={4} step={2} total={6} color="#2ecc71" bid={branch.id} title="Animation Controller" sub="The state machine controlling behavior." />
+      <div style={W}>
+        <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 10, padding: 16, marginBottom: 10 }}>
+          <div style={{ fontSize: 8.5, fontWeight: 700, color: "#2ecc71", marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>STATE MACHINE — TAP TO TRANSITION</div>
+          <StateMachine />
+        </div>
+        <BranchNote branch={branch} stage="STATES" text={s4.stateComplexity} />
+        <Beat
+          text={`A character is a state machine — always in ONE state. Transitions have rules: can't attack while hit. ${
+            is2D ? "For sprites, the state machine switches frame sequences." : "For 3D, it blends animation clips."
+          } Every game character uses this.`}
+          role="Gameplay Programmer"
+        />
+      </div>
+    </div>,
+
+    // 2: Performance
+    <div key={2}>
+      <Header sn={4} step={3} total={6} color="#2ecc71" bid={branch.id} title="Performance vs. Quality" sub="The eternal tradeoff — fidelity costs frames." />
+      <div style={W}>
+        <PerfSlider branch={branch} />
+        <BranchNote branch={branch} stage="PERFORMANCE" text={s4.perfNote} />
+        <Beat text="Crash Bandicoot (1996): ~550 polygons, 1/3 of PS1's entire budget for one character. Today: 100,000+ polys. The tradeoff is the same. Every polygon costs performance." role="Performance Engineer" />
+      </div>
+    </div>,
+
+    // 3: Runtime (UPDATED BEAT TEXT)
+    <div key={3}>
+      <Header sn={4} step={4} total={6} color="#2ecc71" bid={branch.id} title="Runtime Systems" sub="Invisible systems that make characters feel alive." />
+      <div style={W}>
+        <Placeholder
+          desc={`DEBUG VIEW: ${archetype.name} with toggleable overlays — collision bounds (green), bone hierarchy (yellow), nav mesh (blue), audio zones (orange). Each system visualized independently.`}
+          ratio="16/9"
+          tint="#2ecc710a"
+        />
+        <RuntimeToggles />
+        <BranchNote branch={branch} stage="RUNTIME" text={s4.runtimeSystems} />
+        <Beat
+          text="The collision mesh is a completely separate, far simpler object — usually just a capsule or box around the character. Running physics on 30,000 visual polygons would be unplayable. The engine never actually 'collides' with the beautiful mesh you built in Station 3. Players never SEE these systems but FEEL them. Physics makes cloth sway. Collision prevents wall-walking. Audio zones trigger footsteps. Remove any one and the character feels 'wrong.'"
+          role="Systems Programmer"
+        />
+      </div>
+    </div>,
+
+    // 4: Data-Driven
+    <div key={4}>
+      <Header sn={4} step={5} total={6} color="#2ecc71" bid={branch.id} title="Data-Driven Behavior" sub="Tweak numbers, change how the character plays." />
+      <div style={W}>
+        <DataPanel archetype={archetype} />
+        <Beat
+          text="Best games separate DATA from CODE. Programmer writes 'move at SPEED.' Designer changes SPEED from 5 to 8 without touching code. That's why balance patches exist — just changing numbers, not rewriting the game."
+          role="Systems Designer"
+        />
+      </div>
+    </div>,
+
+    // 5: Takeaway
+    <div key={5}>
+      <Header sn={4} step={6} total={6} color="#2ecc71" bid={branch.id} title="Your Character — Complete" sub="From archetype to running in an engine." />
+      <div style={W}>
+        <Placeholder
+          desc={`SHOWCASE: ${archetype.name} performing signature animation in polished environment. Branch ${branch.id} fidelity: ${
+            branch.id === "A"
+              ? "photorealistic skin, cloth physics, volumetric lighting"
+              : branch.id === "B"
+              ? "vibrant stylized materials, expressive animation"
+              : branch.id === "C"
+              ? "distinctive artistic style, hand-painted feel"
+              : "charming pixel art, responsive animation"
+          }. QR code alongside.`}
+          ratio="16/9"
+          tint="#2ecc710a"
+        />
+        <div style={{ background: "linear-gradient(135deg, rgba(46,204,113,0.06), rgba(52,152,219,0.04))", border: "1px solid rgba(46,204,113,0.15)", borderRadius: 10, padding: 16, margin: "12px 0", textAlign: "center" }}>
+          <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.2em", color: "#2ecc71", marginBottom: 7, fontFamily: "'JetBrains Mono', monospace" }}>SCAN TO TAKE HOME</div>
+          <div style={{ width: 80, height: 80, background: "rgba(255,255,255,0.06)", borderRadius: 7, margin: "0 auto 8px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px dashed rgba(255,255,255,0.12)" }}>
+            <div style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace" }}>QR</div>
+          </div>
+          <div style={{ fontSize: 12.5, color: "#fff", fontWeight: 600, fontStyle: "italic" }}>"I made this at the museum today."</div>
+          <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>— Dan's vision for the visitor takeaway</div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+          <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: "rgba(255,255,255,0.3)", marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>JOURNEY</div>
+            <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
+              {archetype.icon} {archetype.name}
+              <br />
+              Branch {branch.id}: {branch.name}
+              <br />
+              {is2D ? "Concept → Engine" : "Concept → 3D → Engine"}
+              <br />
+              {branch.pipeline}
+            </div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: "rgba(255,255,255,0.3)", marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>LEARNED</div>
+            <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
+              ✓ Archetypes create constraints
+              <br />
+              ✓ Fidelity = team × time × tools
+              <br />
+              ✓ Shape language is universal
+              <br />
+              {!is2D && (
+                <>
+                  ✓ 3D pipeline: 9 stages
+                  <br />
+                </>
+              )}
+              ✓ Performance vs quality
+              <br />
+              ✓ Data drives behavior
+            </div>
+          </div>
+        </div>
+
+        <Beat text="You've followed the same pipeline that created every video game character you've ever played. Tools change, team sizes change, fidelity changes — but the process is the same." role="The Whole Team" />
+
+        <div style={{ textAlign: "center", marginTop: 14 }}>
+          <button onClick={() => window.location.reload()} style={{ padding: "10px 24px", background: "#e94560", color: "#fff", border: "none", borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
+            ↺ START OVER
+          </button>
+        </div>
+      </div>
+    </div>,
+  ];
+
+  return (
+    <div style={{ padding: "26px 18px" }}>
+      {content[step]}
+      {step < 5 && (
+        <div style={W}>
+          <Btn onClick={() => setStep(step + 1)} label={`NEXT: STEP ${step + 2} →`} color="#2ecc71" textColor="#fff" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN APP (UPDATED WIRING) ──────────────────────────────────────────────
+
+export default function App() {
+  const [scr, setScr] = useState("s1a");
+  const [arch, setArch] = useState(null);
+  const [br, setBr] = useState(null);
+
+  const [emotionalReg, setEmotionalReg] = useState(null);
+  const [worldTone, setWorldTone] = useState(null);
+  const [charFunction, setCharFunction] = useState(null);
+
+  const [expSels, setExpSels] = useState({});
+  const ref = useRef(null);
+
+  const go = (s) => {
+    setScr(s);
+    setTimeout(() => ref.current?.scrollTo(0, 0), 50);
+  };
+
+  // UPDATED screen order
+  const allScreens = [
+    "s1a", // Q1
+    "s1b", // Q2
+    "s1c", // branch
+    "s1d", // brief
+    "s2p0",
+    "s2p1",
+    "s2p2",
+    "s2p3",
+    "s2p4",
+    "s2p5",
+    "s2p6",
+    "s2p7",
+  ];
+
+  const getOrder = () => {
+    const base = [...allScreens];
+    if (br?.id !== "D") base.push("s3");
+    base.push("s4");
+    return base;
+  };
+
+  const order = getOrder();
+  const idx = order.indexOf(scr);
+  const goBack = () => {
+    if (idx > 0) go(order[idx - 1]);
+  };
+
+  const station = scr.startsWith("s1") ? 0 : scr.startsWith("s2") ? 1 : scr === "s3" ? 2 : 3;
+  const stepCounts = { 0: 4, 1: 8, 2: 9, 3: 6 };
+
+  const stepMap = {
+    // Station 1 (4)
+    s1a: 0,
+    s1b: 1,
+    s1c: 2,
+    s1d: 3,
+
+    // Station 2 (8)
+    s2p0: 0,
+    s2p1: 1,
+    s2p2: 2,
+    s2p3: 3,
+    s2p4: 4,
+    s2p5: 5,
+    s2p6: 6,
+    s2p7: 7,
+
+    // Stations 3 & 4
+    s3: 0,
+    s4: 0,
+  };
+
+  return (
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#0a0a12", color: "#fff", fontFamily: "'Space Grotesk', -apple-system, sans-serif", overflow: "hidden" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+      <ProgressBar station={station} step={stepMap[scr]} totalSteps={stepCounts[station]} onBack={goBack} canGoBack={idx > 0} />
+
+      <div ref={ref} style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+        {/* STATION 1 — 4 steps */}
+        {scr === "s1a" && <S1_ArchQ1 onNext={(fn) => { setCharFunction(fn); go("s1b"); }} />}
+        {scr === "s1b" && (
+          <S1_ArchQ2
+            charFunction={charFunction}
+            onNext={(archetype, er) => {
+              setArch(archetype);
+              setEmotionalReg(er);
+              go("s1c");
+            }}
+          />
+        )}
+        {scr === "s1c" && <S1_Branch archetype={arch} onSelect={(b) => { setBr(b); go("s1d"); }} />}
+        {scr === "s1d" && <S1_Brief archetype={arch} branch={br} emotionalReg={emotionalReg} onConfirm={() => go("s2p0")} />}
+
+        {/* STATION 2 — 8 steps */}
+        {scr === "s2p0" && <S2_P0 archetype={arch} branch={br} onNext={(tone) => { setWorldTone(tone); go("s2p1"); }} />}
+        {scr === "s2p1" && <S2_P1 archetype={arch} branch={br} onNext={() => go("s2p2")} />}
+        {scr === "s2p2" && <S2_P2 archetype={arch} branch={br} onNext={(sels) => { setExpSels(sels); go("s2p3"); }} />}
+        {scr === "s2p3" && <S2_P3 archetype={arch} branch={br} sels={expSels} onNext={() => go("s2p4")} />}
+        {scr === "s2p4" && <S2_P4 archetype={arch} branch={br} onNext={() => go("s2p5")} />}
+        {scr === "s2p5" && <S2_P5 archetype={arch} branch={br} onNext={() => go("s2p6")} />}
+        {scr === "s2p6" && <S2_P6 archetype={arch} branch={br} onNext={() => go("s2p7")} />}
+        {scr === "s2p7" && <S2_P7 archetype={arch} branch={br} onFinish={() => go(br.id === "D" ? "s4" : "s3")} />}
+
+        {/* STATIONS 3 & 4 */}
+        {scr === "s3" && <S3 archetype={arch} branch={br} onFinish={() => go("s4")} />}
+        {scr === "s4" && <S4 archetype={arch} branch={br} worldTone={worldTone} />}
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: "6px 12px", background: "rgba(0,0,0,0.5)", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", fontFamily: "'JetBrains Mono', monospace" }}>CVGM Character Creation · v2.0</div>
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+          {arch && <span style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>{arch.icon} {arch.name}</span>}
+          {br && <Badge branchId={br.id} small />}
+          {br?.id === "D" && <span style={{ fontSize: 7.5, color: "#90A4AE", fontFamily: "'JetBrains Mono', monospace" }}>⚡2D</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
